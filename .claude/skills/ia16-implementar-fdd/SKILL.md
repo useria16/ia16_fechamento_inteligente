@@ -1,5 +1,5 @@
 ---
-name: implementar-fdd
+name: ia16-implementar-fdd
 description: Implementa uma funcionalidade com base em um documento FDD do projeto
 ---
 

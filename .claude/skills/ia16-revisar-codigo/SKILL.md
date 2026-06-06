@@ -1,5 +1,5 @@
 ---
-name: revisar-codigo
+name: ia16-revisar-codigo
 description: Revisa código do projeto conforme arquitetura, segurança e regras de negócio
 ---
 

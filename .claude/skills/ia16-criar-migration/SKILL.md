@@ -1,5 +1,5 @@
 ---
-name: criar-migration
+name: ia16-criar-migration
 description: Cria migration Alembic seguindo o padrão de banco em português
 ---
 

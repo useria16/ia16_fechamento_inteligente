@@ -1,5 +1,5 @@
 ---
-name: criar-regra-conciliacao
+name: ia16-criar-regra-conciliacao
 description: Cria ou ajusta regra de conciliação financeira configurável
 ---
 
