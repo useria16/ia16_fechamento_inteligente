@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: str
     STORAGE_ENV_PREFIX: str = "dev"
     SECRET_KEY: str = "change_me"
+    SUPABASE_JWT_SECRET: str = ""
 
 
 settings = Settings()
