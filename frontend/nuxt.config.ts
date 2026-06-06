@@ -12,13 +12,9 @@ export default defineNuxtConfig({
     },
   },
 
-  router: {
-    middleware: ["auth"],
-  },
-
   typescript: {
     strict: true,
   },
 
-  devtools: { enabled: true },
+  devtools: { enabled: false },
 })
