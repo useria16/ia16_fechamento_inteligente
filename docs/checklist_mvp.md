@@ -16,30 +16,30 @@
 
 ## Sprint 2 — Autenticação, empresas e usuários
 
-- [ ] Login via Supabase Auth
-- [ ] Sessão JWT validada no backend
-- [ ] Migration `empresas`
-- [ ] Migration `usuarios`
-- [ ] Model SQLAlchemy `Empresa`
-- [ ] Model SQLAlchemy `Usuario`
-- [ ] Schema Pydantic empresa
-- [ ] Schema Pydantic usuario
-- [ ] Endpoint `GET /api/empresas`
-- [ ] Endpoint `POST /api/empresas`
-- [ ] Endpoint `GET /api/usuarios`
-- [ ] Endpoint `POST /api/usuarios`
-- [ ] Endpoint `PATCH /api/usuarios/{id}`
-- [ ] Perfil `admin_ia16` funcional
-- [ ] Perfil `cliente_admin` funcional
-- [ ] Perfil `cliente_operador` funcional
-- [ ] Tela `/login`
-- [ ] Tela `/admin/empresas`
-- [ ] Tela `/admin/empresas/nova`
-- [ ] Tela `/admin/empresas/[id]`
-- [ ] Tela `/admin/usuarios`
-- [ ] Tela `/admin/usuarios/novo`
-- [ ] Store Pinia para sessão
-- [ ] Políticas RLS iniciais (empresas, usuarios)
+- [x] Login via Supabase Auth
+- [x] Sessão JWT validada no backend
+- [x] Migration `empresas`
+- [x] Migration `usuarios`
+- [x] Model SQLAlchemy `Empresa`
+- [x] Model SQLAlchemy `Usuario`
+- [x] Schema Pydantic empresa
+- [x] Schema Pydantic usuario
+- [x] Endpoint `GET /api/empresas`
+- [x] Endpoint `POST /api/empresas`
+- [x] Endpoint `GET /api/usuarios`
+- [x] Endpoint `POST /api/usuarios`
+- [x] Endpoint `PATCH /api/usuarios/{id}`
+- [x] Perfil `admin_ia16` funcional
+- [x] Perfil `cliente_admin` funcional
+- [x] Perfil `cliente_operador` funcional
+- [x] Tela `/login`
+- [x] Tela `/admin/empresas`
+- [x] Tela `/admin/empresas/nova`
+- [x] Tela `/admin/empresas/[id]`
+- [x] Tela `/admin/usuarios`
+- [x] Tela `/admin/usuarios/novo`
+- [x] Store Pinia para sessão
+- [x] Políticas RLS iniciais (empresas, usuarios)
 
 ## Sprint 3 — Fontes de dados e modelos de arquivo
 
