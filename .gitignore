@@ -1,0 +1,51 @@
+# Ambiente
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Node/Nuxt
+node_modules/
+.nuxt/
+.output/
+.nitro/
+
+# Logs
+*.log
+logs/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Credenciais e segredos
+secrets/
+credentials.json
+service_role_key.txt
+*.pem
+*.key
+
+# Claude Code - configurações locais
+.claude/settings.local.json
+.claude/memory/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.zip
