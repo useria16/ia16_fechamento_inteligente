@@ -53,7 +53,7 @@
         <col style="width: 130px">  <!-- ENTRADA EXTRATO -->
         <col style="width: 130px">  <!-- SAÍDA EXTRATO -->
         <col style="width: 130px">  <!-- SALDO -->
-        <col style="width: 170px">  <!-- iA16 -->
+        <col style="width: 200px">  <!-- iA16 -->
       </colgroup>
 
       <!-- Cabeçalho estilo Excel -->
@@ -147,36 +147,64 @@
               {{ l.saldo != null ? fmtValor(l.saldo) : '—' }}
             </td>
 
-            <!-- Indicador iA16: status + fluxo + toggle expand -->
-            <td class="px-2 py-1.5 text-center border-l border-slate-300 bg-slate-50/60">
-              <button
-                class="inline-flex items-center justify-center gap-1 w-full"
-                @click="toggleExpandido(l.id)"
-              >
-                <!-- Status dot -->
-                <span
-                  class="w-2 h-2 rounded-full flex-shrink-0"
-                  :class="statusPonto(l.status_revisao)"
-                  :title="l.status_revisao"
-                />
-                <!-- Fluxo badge compacto -->
+            <!-- Indicador iA16: ações rápidas + fluxo + expand -->
+            <td class="px-2 py-1.5 border-l border-slate-300 bg-slate-50/60">
+              <div class="flex items-center justify-center gap-1">
+
+                <!-- Botão Revisado -->
+                <button
+                  :title="getStatusAtual(l) === 'revisado' ? 'Clique para desfazer' : 'Marcar como revisado'"
+                  class="w-6 h-6 rounded flex items-center justify-center transition-colors flex-shrink-0"
+                  :class="getStatusAtual(l) === 'revisado'
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'text-slate-400 hover:bg-green-50 hover:text-green-600'"
+                  @click.stop="toggleStatus(l, 'revisado')"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+
+                <!-- Botão Ignorar -->
+                <button
+                  :title="getStatusAtual(l) === 'ignorado' ? 'Clique para desfazer' : 'Ignorar lançamento'"
+                  class="w-6 h-6 rounded flex items-center justify-center transition-colors flex-shrink-0"
+                  :class="getStatusAtual(l) === 'ignorado'
+                    ? 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                    : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'"
+                  @click.stop="toggleStatus(l, 'ignorado')"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4" />
+                  </svg>
+                </button>
+
+                <!-- Badge fluxo -->
                 <span
                   v-if="l.tipo_conferencia_fluxo"
-                  class="text-xs px-1.5 py-0.5 rounded font-medium leading-none"
+                  class="text-xs px-1.5 py-0.5 rounded font-medium leading-none flex-shrink-0"
                   :class="CONFERENCIA_CLASSES[l.tipo_conferencia_fluxo]"
                   :title="l.observacao_sistema ?? ''"
                 >
                   {{ CONFERENCIA_LABELS[l.tipo_conferencia_fluxo] }}
                 </span>
-                <!-- Seta expand -->
-                <svg
-                  class="w-3 h-3 text-slate-400 transition-transform flex-shrink-0"
-                  :class="expandidos.has(l.id) ? 'rotate-90' : ''"
-                  fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+
+                <!-- Seta expand (detalhes / categoria / observação) -->
+                <button
+                  title="Ver detalhes, categoria e observação"
+                  class="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors flex-shrink-0"
+                  @click="toggleExpandido(l.id)"
                 >
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+                  <svg
+                    class="w-3 h-3 transition-transform"
+                    :class="expandidos.has(l.id) ? 'rotate-90' : ''"
+                    fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+              </div>
             </td>
           </tr>
 
@@ -274,6 +302,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   salvar: [batch: Array<{ id: string; dados: AtualizarLancamentoAnotado }>]
+  atualizarStatus: [id: string, status: 'revisado' | 'ignorado' | 'pendente']
 }>()
 
 // ── Filtro ───────────────────────────────────────────────────────────────────
@@ -291,6 +320,18 @@ const lancamentosFiltrados = computed(() =>
     ? props.lancamentos
     : props.lancamentos.filter(l => l.status_revisao === filtroAtivo.value),
 )
+
+// ── Ações rápidas de status ───────────────────────────────────────────────────
+
+function getStatusAtual(l: LancamentoExtratoAnotado): string {
+  return String(getValor(l.id, 'status_revisao') ?? l.status_revisao)
+}
+
+function toggleStatus(l: LancamentoExtratoAnotado, novoStatus: 'revisado' | 'ignorado') {
+  const atual = getStatusAtual(l)
+  const status = atual === novoStatus ? 'pendente' : novoStatus
+  emit('atualizarStatus', l.id, status)
+}
 
 // ── Expandir linhas (painel iA16) ─────────────────────────────────────────────
 

@@ -179,3 +179,43 @@ def _parse_decimal(val: Any) -> Decimal | None:
         return Decimal(str(val)).normalize()
     except (InvalidOperation, ValueError):
         return None
+
+
+def extrair_metadados_banco(conteudo: bytes, config: dict) -> dict:
+    """Extrai metadados do cabeçalho do extrato (Nome, Agência, Conta, Atualização, Período)."""
+    linha_cabecalho = config.get("linha_cabecalho", 10)
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
+
+    aba_nome = config.get("aba", "Lançamentos")
+    ws = wb[aba_nome] if aba_nome in wb.sheetnames else wb.active
+
+    rotulos = {
+        "atualização:": "atualizacao",
+        "atualização":  "atualizacao",
+        "nome:":        "nome",
+        "nome":         "nome",
+        "agência:":     "agencia",
+        "agência":      "agencia",
+        "agencia:":     "agencia",
+        "agencia":      "agencia",
+        "conta:":       "conta",
+        "conta":        "conta",
+        "periodo:":     "periodo",
+        "período:":     "periodo",
+        "periodo":      "periodo",
+        "período":      "periodo",
+    }
+
+    meta: dict = {}
+    for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        if i >= linha_cabecalho:
+            break
+        if not row or row[0] is None:
+            continue
+        rotulo = str(row[0]).strip().lower()
+        chave = rotulos.get(rotulo)
+        if chave and len(row) > 1 and row[1] is not None:
+            meta[chave] = str(row[1]).strip()
+
+    wb.close()
+    return meta

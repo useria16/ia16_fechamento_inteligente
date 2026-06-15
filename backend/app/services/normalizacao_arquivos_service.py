@@ -56,6 +56,13 @@ def normalizar_arquivo(
 
     realizados, previstos = _executar_normalizacao(conteudo, modelo, str(arquivo.id))
 
+    if modelo.tipo_estrutura == "tabular":
+        from app.normalizadores.extrato_bancario_tabular import extrair_metadados_banco
+        meta_banco = extrair_metadados_banco(conteudo, modelo.mapeamento_colunas or {})
+        if meta_banco:
+            arquivo.metadados = {**(arquivo.metadados or {}), **meta_banco}
+            db.flush()
+
     resultado = ResultadoNormalizacaoArquivo(
         arquivo_id=str(arquivo.id),
         tipo_arquivo=arquivo.tipo_arquivo,

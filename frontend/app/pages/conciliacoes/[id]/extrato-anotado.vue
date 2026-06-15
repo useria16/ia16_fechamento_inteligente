@@ -126,6 +126,7 @@
         :lancamentos="lancamentos"
         :salvando="salvandoLote"
         @salvar="onSalvarLote"
+        @atualizarStatus="onAtualizarStatus"
         @abrirDetalhes="abrirDetalhes"
       />
     </div>
@@ -202,6 +203,12 @@ async function confirmarNoFluxo() {
   } finally {
     confirmandoNoFluxo.value = false
   }
+}
+
+// ── Atualização rápida de status (botões inline) ─────────────────────────────
+
+async function onAtualizarStatus(id: string, status: 'revisado' | 'ignorado' | 'pendente') {
+  await anotar(id, { status_revisao: status })
 }
 
 // ── Save em lote ─────────────────────────────────────────────────────────────

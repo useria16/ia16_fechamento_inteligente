@@ -1,5 +1,19 @@
 <template>
+  <!-- Item desabilitado: não navega, visual apagado -->
+  <span
+    v-if="disabled"
+    class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm cursor-not-allowed select-none text-slate-300"
+    :title="'Em breve'"
+  >
+    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" :d="iconPath" />
+    </svg>
+    <slot />
+  </span>
+
+  <!-- Item ativo: navegação normal -->
   <NuxtLink
+    v-else
     :to="to"
     class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors"
     :class="isActive
@@ -17,6 +31,7 @@
 const props = defineProps<{
   to: string
   icon: string
+  disabled?: boolean
 }>()
 
 const route = useRoute()

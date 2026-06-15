@@ -21,6 +21,7 @@
         :key="item.to"
         :to="item.to"
         :icon="item.icon"
+        :disabled="item.disabled"
       >
         {{ item.label }}
       </LayoutAppSidebarLink>
@@ -50,18 +51,19 @@ type NavItem = {
   icon: string
   label: string
   perfis?: string[]
+  disabled?: boolean
 }
 
 const todosItens: NavItem[] = [
-  { to: '/dashboard',                  icon: 'dashboard',    label: 'Dashboard' },
-  { to: '/admin/empresas',             icon: 'empresas',     label: 'Empresas',       perfis: ['admin_ia16'] },
-  { to: '/admin/usuarios',             icon: 'usuarios',     label: 'Usuários',        perfis: ['admin_ia16'] },
-  { to: '/conciliacoes',               icon: 'conciliacoes', label: 'Conciliações' },
-  { to: '/arquivos',                   icon: 'arquivos',     label: 'Arquivos' },
-  { to: '/divergencias',               icon: 'divergencias', label: 'Divergências' },
-  { to: '/relatorios',                 icon: 'relatorios',   label: 'Relatórios' },
-  { to: '/configuracoes-conciliacao',  icon: 'configuracoes',label: 'Configurações',   perfis: ['admin_ia16', 'cliente_admin'] },
-  { to: '/logs',                       icon: 'logs',         label: 'Logs',            perfis: ['admin_ia16'] },
+  { to: '/dashboard',                 icon: 'dashboard',    label: 'Dashboard' },
+  { to: '/admin/empresas',            icon: 'empresas',     label: 'Empresas',     perfis: ['admin_ia16'],                        disabled: true },
+  { to: '/admin/usuarios',            icon: 'usuarios',     label: 'Usuários',     perfis: ['admin_ia16'],                        disabled: true },
+  { to: '/conciliacoes',              icon: 'conciliacoes', label: 'Conciliações' },
+  { to: '/arquivos',                  icon: 'arquivos',     label: 'Arquivos',                                                    disabled: true },
+  { to: '/divergencias',              icon: 'divergencias', label: 'Divergências',                                                disabled: true },
+  { to: '/relatorios',                icon: 'relatorios',   label: 'Relatórios',                                                  disabled: true },
+  { to: '/configuracoes-conciliacao', icon: 'configuracoes',label: 'Configurações', perfis: ['admin_ia16', 'cliente_admin'],      disabled: true },
+  { to: '/logs',                      icon: 'logs',         label: 'Logs',          perfis: ['admin_ia16'],                       disabled: true },
 ]
 
 const itensFiltrados = computed(() => {
