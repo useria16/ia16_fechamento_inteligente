@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ middleware: "auth" })
+definePageMeta({ layout: "default", middleware: "auth" })
 
 const api = useApi()
 const salvando = ref(false)

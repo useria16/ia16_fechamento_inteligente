@@ -33,3 +33,7 @@ services:
 networks:
   default:
     name: ia16_fechamento_network
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: "fd00::/80"

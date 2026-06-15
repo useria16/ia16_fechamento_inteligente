@@ -9,7 +9,4 @@ export default defineNuxtRouteMiddleware((to) => {
     return navigateTo("/login")
   }
 
-  if (to.path.startsWith("/admin") && auth.perfil !== "admin_ia16") {
-    return navigateTo("/dashboard")
-  }
 })

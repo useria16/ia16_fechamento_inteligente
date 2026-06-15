@@ -1,5 +1,5 @@
 .PHONY: help setup-backend migrate-dev migrate-prod promote diff-schemas \
-        dev-backend dev-frontend docker-up docker-down
+        dev-backend dev-frontend docker-up docker-down limpar-arquivos-expirados
 
 help:
 	@echo "Comandos disponíveis:"
@@ -55,3 +55,8 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+# ── Retenção de arquivos ─────────────────────────────────────────────────────
+
+limpar-arquivos-expirados:
+	cd backend && DB_SCHEMA=ia16_fechamento_dev .venv/bin/python -m scripts.limpar_arquivos_expirados

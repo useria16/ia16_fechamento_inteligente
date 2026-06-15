@@ -88,6 +88,42 @@ Fechamento financeiro:
 - adquirentes
 - outro
 
+## Padrão Frontend Nuxt
+
+Toda criação ou alteração no frontend deve seguir:
+
+- `docs/09_Padrao_Frontend_Nuxt.md`
+
+Antes de criar ou alterar telas, componentes, composables, stores ou schemas, usar a skill:
+
+- `ia16-frontend`
+
+Regras obrigatórias:
+
+- usar componentes reutilizáveis
+- extrair lógica reutilizável para composables
+- usar Pinia apenas para estado compartilhado
+- usar Zod para validações
+- evitar acoplamento entre componentes
+- evitar efeitos colaterais ao alterar componentes
+- não colocar regra de negócio complexa diretamente em `pages/`
+- não consumir API sem contrato definido
+- não inverter o fluxo do produto: `Novo Fechamento` executa conciliação e `Arquivos` é apoio/histórico
+
+## Padrão de API
+
+Toda API deve seguir o documento:
+
+- `docs/08_Padrao_API_Contratos.md`
+
+Antes de implementar qualquer endpoint, criar ou revisar o contrato de API.
+
+Usar a skill:
+
+- `ia16-api`
+
+Nenhum endpoint deve ser implementado sem contrato definido.
+
 ## Documentos de referência
 
 Antes de implementar qualquer funcionalidade, consultar os documentos na pasta `docs/`, especialmente:

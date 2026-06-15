@@ -6,9 +6,10 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || "http://localhost:8000",
+      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL ?? "",
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || "",
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || "",
+      supabaseSchema: process.env.NUXT_PUBLIC_SUPABASE_SCHEMA || "ia16_fechamento_dev",
     },
   },
 
