@@ -3,11 +3,7 @@ export type { ModoRetencaoArquivo }
 
 export type TipoArquivo =
   | 'extrato_bancario'
-  | 'relatorio_vendas'
-  | 'relatorio_recebiveis'
   | 'planilha_interna'
-  | 'taxas_adquirente'
-  | 'outro'
 
 export type StatusArquivo =
   | 'enviado'
@@ -38,12 +34,8 @@ export interface ArquivoEnviado {
 }
 
 export const tipoArquivoLabels: Record<string, string> = {
-  extrato_bancario:     'Extrato bancário',
-  relatorio_vendas:     'Relatório de vendas',
-  relatorio_recebiveis: 'Relatório de recebíveis',
-  planilha_interna:     'Planilha interna',
-  taxas_adquirente:     'Taxas de adquirente',
-  outro:                'Outro',
+  extrato_bancario: 'Extrato Bancário',
+  planilha_interna: 'Fluxo de Caixa',
 }
 
 export const statusArquivoLabels: Record<string, string> = {

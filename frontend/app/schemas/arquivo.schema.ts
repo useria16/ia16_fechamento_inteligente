@@ -2,11 +2,7 @@ import { z } from 'zod'
 
 export const TIPOS_ARQUIVO_PERMITIDOS = [
   'extrato_bancario',
-  'relatorio_vendas',
-  'relatorio_recebiveis',
   'planilha_interna',
-  'taxas_adquirente',
-  'outro',
 ] as const
 
 export const EXTENSOES_PERMITIDAS = ['.xlsx', '.xls']

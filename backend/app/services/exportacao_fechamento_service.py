@@ -32,6 +32,10 @@ def _sanitizar_nome(valor: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", valor.strip().lower())
 
 
+def _sanitizar_nome_arquivo(valor: str) -> str:
+    return re.sub(r'[/\\:*?"<>|]', "_", valor.strip())
+
+
 def _estilizar_cabecalho(ws, linha: int, num_colunas: int) -> None:
     fill = PatternFill("solid", fgColor="1F4E79")
     font = Font(bold=True, color="FFFFFF")
@@ -546,10 +550,9 @@ def _gerar_excel_extrato_anotado(db: Session, fechamento: FechamentoFinanceiro) 
     buffer.seek(0)
     conteudo = buffer.read()
 
-    empresa_slug = _sanitizar_nome(empresa_nome)
-    data_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    id_curto = str(fechamento.id)[:8]
-    nome = f"ia16_extrato_anotado_{empresa_slug}_{data_str}_{id_curto}.xlsx"
+    titulo_limpo = _sanitizar_nome_arquivo(fechamento.titulo)
+    conta_str = f" - cc {conta}" if conta else ""
+    nome = f"{titulo_limpo}{conta_str}.xlsx"
 
     return conteudo, nome
 

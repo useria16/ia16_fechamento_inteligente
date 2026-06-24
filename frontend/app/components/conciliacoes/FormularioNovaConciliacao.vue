@@ -117,14 +117,7 @@ const erroGeral = ref<string | null>(null)
 const salvando = ref(false)
 
 const tipos = [
-  { valor: 'extrato_anotado',     label: 'Extrato Anotado (novo fluxo Daxx)' },
-  { valor: 'bancaria',            label: 'Bancária' },
-  { valor: 'caixa',               label: 'Caixa' },
-  { valor: 'recebiveis',          label: 'Recebíveis' },
-  { valor: 'caixa_recebiveis',    label: 'Caixa e Recebíveis' },
-  { valor: 'vendas_recebimentos', label: 'Vendas e Recebimentos' },
-  { valor: 'adquirentes',         label: 'Adquirentes' },
-  { valor: 'outro',               label: 'Outro' },
+  { valor: 'extrato_anotado', label: 'Extrato Anotado' },
 ]
 
 
