@@ -61,7 +61,7 @@ const todosItens: NavItem[] = [
   { to: '/conciliacoes',              icon: 'conciliacoes', label: 'Conciliações' },
   { to: '/arquivos',                  icon: 'arquivos',     label: 'Arquivos',                                                    disabled: true },
   { to: '/divergencias',              icon: 'divergencias', label: 'Divergências',                                                disabled: true },
-  { to: '/relatorios',                icon: 'relatorios',   label: 'Relatórios',                                                  disabled: true },
+  { to: '/relatorios',                icon: 'relatorios',   label: 'Relatórios' },
   { to: '/configuracoes-conciliacao', icon: 'configuracoes',label: 'Configurações', perfis: ['admin_ia16', 'cliente_admin'],      disabled: true },
   { to: '/logs',                      icon: 'logs',         label: 'Logs',          perfis: ['admin_ia16'],                       disabled: true },
 ]

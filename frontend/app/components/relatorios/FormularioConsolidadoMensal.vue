@@ -11,21 +11,22 @@
       <div>
         <p class="text-sm font-semibold text-slate-800">Consolidado Mensal</p>
         <p class="text-xs text-slate-500 mt-0.5">
-          Gera uma planilha Excel única com todas as conciliações do mês selecionado.
+          Gera uma planilha Excel com as conciliações do mês selecionado.
         </p>
       </div>
     </div>
 
-    <!-- Formulário de filtros -->
+    <!-- Formulário -->
     <form class="space-y-4" @submit.prevent="onSubmit">
 
-      <!-- Linha 1: Mês + Ano -->
+      <!-- Mês + Ano -->
       <div class="grid grid-cols-2 gap-4">
         <div class="space-y-1">
-          <label class="block text-xs font-medium text-slate-600">Mês</label>
+          <label class="block text-xs font-medium text-slate-600">Mês <span class="text-red-400">*</span></label>
           <select
             v-model="form.mes"
-            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full rounded-lg border px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            :class="erros.mes ? 'border-red-400' : 'border-slate-200'"
           >
             <option v-for="m in meses" :key="m.valor" :value="m.valor">{{ m.label }}</option>
           </select>
@@ -33,10 +34,11 @@
         </div>
 
         <div class="space-y-1">
-          <label class="block text-xs font-medium text-slate-600">Ano</label>
+          <label class="block text-xs font-medium text-slate-600">Ano <span class="text-red-400">*</span></label>
           <select
             v-model="form.ano"
-            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            class="w-full rounded-lg border px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            :class="erros.ano ? 'border-red-400' : 'border-slate-200'"
           >
             <option v-for="a in anos" :key="a" :value="a">{{ a }}</option>
           </select>
@@ -44,33 +46,36 @@
         </div>
       </div>
 
-      <!-- Tipo de Conciliação -->
+      <!-- Modelo de conciliação -->
       <div class="space-y-1">
-        <label class="block text-xs font-medium text-slate-600">Tipo de Conciliação</label>
+        <label class="block text-xs font-medium text-slate-600">Modelo de conciliação <span class="text-red-400">*</span></label>
         <select
           v-model="form.tipo_conciliacao"
-          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="w-full rounded-lg border px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          :class="erros.tipo_conciliacao ? 'border-red-400' : 'border-slate-200'"
         >
           <option value="">Selecione...</option>
-          <option v-for="tipo in tiposConciliacao" :key="tipo.valor" :value="tipo.valor">
+          <option v-for="tipo in modelos" :key="tipo.valor" :value="tipo.valor">
             {{ tipo.label }}
           </option>
         </select>
         <p v-if="erros.tipo_conciliacao" class="text-xs text-red-500">{{ erros.tipo_conciliacao }}</p>
       </div>
 
-      <!-- Empresa (apenas admin_ia16) -->
+      <!-- Empresa — apenas admin_ia16 -->
       <div v-if="isAdmin" class="space-y-1">
-        <label class="block text-xs font-medium text-slate-600">
-          Empresa
-          <span class="ml-1 text-slate-400 font-normal">(obrigatório para admin)</span>
-        </label>
-        <input
+        <label class="block text-xs font-medium text-slate-600">Empresa <span class="text-red-400">*</span></label>
+        <select
           v-model="form.empresa_id"
-          type="text"
-          placeholder="ID da empresa (UUID)"
-          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+          :disabled="carregandoEmpresas"
+          class="w-full rounded-lg border px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          :class="erros.empresa_id ? 'border-red-400' : 'border-slate-200'"
+        >
+          <option value="">
+            {{ carregandoEmpresas ? 'Carregando empresas...' : empresas.length === 0 ? 'Nenhuma empresa disponível' : 'Selecione a empresa' }}
+          </option>
+          <option v-for="e in empresas" :key="e.id" :value="e.id">{{ e.nome }}</option>
+        </select>
         <p v-if="erros.empresa_id" class="text-xs text-red-500">{{ erros.empresa_id }}</p>
       </div>
 
@@ -118,13 +123,13 @@
 
     <!-- Informativo -->
     <div class="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 text-xs text-slate-500 space-y-1">
-      <p class="font-medium text-slate-600">O consolidado mensal inclui:</p>
+      <p class="font-medium text-slate-600">O consolidado inclui:</p>
       <ul class="list-disc list-inside space-y-0.5 pl-1">
-        <li>Todas as conciliações aprovadas, processadas ou com divergências do mês</li>
-        <li>Aba de resumo com totais do período</li>
-        <li>Aba com todos os lançamentos consolidados</li>
-        <li>Aba com os dias incluídos e seus respectivos totais</li>
-        <li>Aba com pendências e divergências do mês</li>
+        <li>Todas as conciliações aprovadas ou processadas do mês</li>
+        <li>Resumo com totais do período</li>
+        <li>Todos os lançamentos do mês em uma única planilha</li>
+        <li>Lista dos dias incluídos com totais por dia</li>
+        <li>Pendências e divergências do mês</li>
       </ul>
     </div>
 
@@ -137,6 +142,7 @@ import type { ConsolidadoMensalForm } from '~/schemas/relatorio.schema'
 
 const auth = useAuthStore()
 const { baixando, erro, sucesso, baixarConsolidado, limparFeedback } = useConsolidadoMensal()
+const { empresas, carregando: carregandoEmpresas, carregar: carregarEmpresas } = useEmpresas()
 
 const isAdmin = computed(() => auth.perfil === 'admin_ia16')
 
@@ -144,14 +150,23 @@ const agora = new Date()
 const form = reactive<ConsolidadoMensalForm>({
   ano: agora.getFullYear(),
   mes: agora.getMonth() + 1,
-  tipo_conciliacao: '',
+  tipo_conciliacao: 'extrato_anotado',
   empresa_id: undefined,
 })
 
 const erros = reactive<Partial<Record<keyof ConsolidadoMensalForm, string>>>({})
-
 const feedbackMensagem = ref<string | null>(null)
 const feedbackTipo = ref<'sucesso' | 'erro'>('sucesso')
+
+onMounted(async () => {
+  if (isAdmin.value) {
+    await carregarEmpresas()
+    // Pré-seleciona automaticamente se houver apenas uma empresa
+    if (empresas.value.length === 1) {
+      form.empresa_id = empresas.value[0].id
+    }
+  }
+})
 
 const meses = [
   { valor: 1, label: 'Janeiro' }, { valor: 2, label: 'Fevereiro' },
@@ -165,15 +180,15 @@ const meses = [
 const anoAtual = agora.getFullYear()
 const anos = Array.from({ length: 5 }, (_, i) => anoAtual - i)
 
-const tiposConciliacao = [
-  { valor: 'extrato_anotado', label: 'Extrato Anotado' },
-  { valor: 'bancaria', label: 'Bancária' },
-  { valor: 'caixa', label: 'Caixa' },
-  { valor: 'recebiveis', label: 'Recebíveis' },
-  { valor: 'caixa_recebiveis', label: 'Caixa + Recebíveis' },
-  { valor: 'vendas_recebimentos', label: 'Vendas e Recebimentos' },
-  { valor: 'adquirentes', label: 'Adquirentes' },
-  { valor: 'outro', label: 'Outro' },
+const modelos = [
+  { valor: 'extrato_anotado',      label: 'Extrato Anotado' },
+  { valor: 'bancaria',             label: 'Bancária' },
+  { valor: 'caixa',                label: 'Caixa' },
+  { valor: 'recebiveis',           label: 'Recebíveis' },
+  { valor: 'caixa_recebiveis',     label: 'Caixa + Recebíveis' },
+  { valor: 'vendas_recebimentos',  label: 'Vendas e Recebimentos' },
+  { valor: 'adquirentes',          label: 'Adquirentes' },
+  { valor: 'outro',                label: 'Outro' },
 ]
 
 function exibirFeedback(tipo: 'sucesso' | 'erro', mensagem: string) {
@@ -198,7 +213,7 @@ function validar(): boolean {
   }
 
   if (isAdmin.value && !form.empresa_id?.trim()) {
-    erros.empresa_id = 'ID da empresa é obrigatório para administradores.'
+    erros.empresa_id = 'Selecione uma empresa para exportar.'
     return false
   }
 
