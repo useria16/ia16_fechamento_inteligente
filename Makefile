@@ -1,8 +1,9 @@
-.PHONY: help setup-backend migrate-dev migrate-prod promote diff-schemas \
+.PHONY: help dev setup-backend migrate-dev migrate-prod promote diff-schemas \
         dev-backend dev-frontend docker-up docker-down limpar-arquivos-expirados
 
 help:
 	@echo "Comandos disponíveis:"
+	@echo "  dev             Inicia backend e frontend juntos (uso principal)"
 	@echo "  setup-backend   Cria .venv e instala dependências do backend"
 	@echo "  migrate-dev     Aplica migrations no schema dev"
 	@echo "  migrate-prod    Aplica migrations no schema prod"
@@ -41,6 +42,12 @@ diff-schemas:
 	cd backend && DB_SCHEMA=ia16_fechamento_prod .venv/bin/alembic current
 
 # ── Desenvolvimento local ─────────────────────────────────────────────────────
+
+dev:
+	@trap 'kill 0' INT; \
+	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000 & \
+	cd frontend && npm run dev & \
+	wait
 
 dev-backend:
 	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
