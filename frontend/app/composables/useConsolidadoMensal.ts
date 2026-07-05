@@ -27,15 +27,19 @@ export function useConsolidadoMensal() {
       sucesso.value = true
       return true
     } catch (e: any) {
-      const codigoErro = (e?.data as any)?.erro?.codigo as string | undefined
+      // FastAPI envolve o detail em {"detail": {...}}, então o caminho é e.data.detail.erro
+      const erroApi = (e?.data as any)?.detail?.erro ?? (e?.data as any)?.erro
+      const codigoErro = erroApi?.codigo as string | undefined
       if (codigoErro === 'SEM_CONCILIACOES_NO_PERIODO') {
-        erro.value = 'Nenhuma conciliação encontrada para este mês e tipo de conciliação.'
+        erro.value = 'Nenhuma conciliação encontrada para este mês. Verifique se há conciliações aprovadas ou processadas no período.'
       } else if (codigoErro === 'EMPRESA_OBRIGATORIA') {
         erro.value = 'Selecione uma empresa para exportar.'
       } else if (codigoErro === 'SEM_PERMISSAO_EMPRESA') {
         erro.value = 'Sem permissão para exportar dados desta empresa.'
+      } else if (codigoErro === 'EMPRESA_NAO_ENCONTRADA') {
+        erro.value = 'Empresa não encontrada. Selecione outra empresa.'
       } else {
-        erro.value = (e?.data as any)?.erro?.mensagem ?? e?.message ?? 'Não foi possível gerar o consolidado mensal.'
+        erro.value = erroApi?.mensagem ?? 'Não foi possível gerar o consolidado mensal.'
       }
       return false
     } finally {
