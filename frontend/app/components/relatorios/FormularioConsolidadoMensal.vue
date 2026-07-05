@@ -1,0 +1,218 @@
+<template>
+  <div class="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
+
+    <!-- Cabeçalho -->
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-slate-800">Consolidado Mensal</p>
+        <p class="text-xs text-slate-500 mt-0.5">
+          Gera uma planilha Excel única com todas as conciliações do mês selecionado.
+        </p>
+      </div>
+    </div>
+
+    <!-- Formulário de filtros -->
+    <form class="space-y-4" @submit.prevent="onSubmit">
+
+      <!-- Linha 1: Mês + Ano -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="space-y-1">
+          <label class="block text-xs font-medium text-slate-600">Mês</label>
+          <select
+            v-model="form.mes"
+            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option v-for="m in meses" :key="m.valor" :value="m.valor">{{ m.label }}</option>
+          </select>
+          <p v-if="erros.mes" class="text-xs text-red-500">{{ erros.mes }}</p>
+        </div>
+
+        <div class="space-y-1">
+          <label class="block text-xs font-medium text-slate-600">Ano</label>
+          <select
+            v-model="form.ano"
+            class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option v-for="a in anos" :key="a" :value="a">{{ a }}</option>
+          </select>
+          <p v-if="erros.ano" class="text-xs text-red-500">{{ erros.ano }}</p>
+        </div>
+      </div>
+
+      <!-- Tipo de Conciliação -->
+      <div class="space-y-1">
+        <label class="block text-xs font-medium text-slate-600">Tipo de Conciliação</label>
+        <select
+          v-model="form.tipo_conciliacao"
+          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Selecione...</option>
+          <option v-for="tipo in tiposConciliacao" :key="tipo.valor" :value="tipo.valor">
+            {{ tipo.label }}
+          </option>
+        </select>
+        <p v-if="erros.tipo_conciliacao" class="text-xs text-red-500">{{ erros.tipo_conciliacao }}</p>
+      </div>
+
+      <!-- Empresa (apenas admin_ia16) -->
+      <div v-if="isAdmin" class="space-y-1">
+        <label class="block text-xs font-medium text-slate-600">
+          Empresa
+          <span class="ml-1 text-slate-400 font-normal">(obrigatório para admin)</span>
+        </label>
+        <input
+          v-model="form.empresa_id"
+          type="text"
+          placeholder="ID da empresa (UUID)"
+          class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <p v-if="erros.empresa_id" class="text-xs text-red-500">{{ erros.empresa_id }}</p>
+      </div>
+
+      <!-- Feedback -->
+      <div
+        v-if="feedbackMensagem"
+        :class="[
+          'flex items-start gap-3 rounded-lg border px-4 py-3 text-sm',
+          feedbackTipo === 'sucesso'
+            ? 'bg-green-50 border-green-200 text-green-700'
+            : 'bg-red-50 border-red-200 text-red-600',
+        ]"
+      >
+        <svg class="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path v-if="feedbackTipo === 'sucesso'" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          <path v-else stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span>{{ feedbackMensagem }}</span>
+      </div>
+
+      <!-- Botão -->
+      <div class="pt-1">
+        <button
+          type="submit"
+          :disabled="baixando"
+          :class="[
+            'inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+            baixando
+              ? 'text-slate-400 bg-slate-100 cursor-not-allowed'
+              : 'text-white bg-blue-600 hover:bg-blue-700 cursor-pointer',
+          ]"
+        >
+          <svg v-if="baixando" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          {{ baixando ? 'Gerando consolidado...' : 'Exportar consolidado mensal' }}
+        </button>
+      </div>
+
+    </form>
+
+    <!-- Informativo -->
+    <div class="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 text-xs text-slate-500 space-y-1">
+      <p class="font-medium text-slate-600">O consolidado mensal inclui:</p>
+      <ul class="list-disc list-inside space-y-0.5 pl-1">
+        <li>Todas as conciliações aprovadas, processadas ou com divergências do mês</li>
+        <li>Aba de resumo com totais do período</li>
+        <li>Aba com todos os lançamentos consolidados</li>
+        <li>Aba com os dias incluídos e seus respectivos totais</li>
+        <li>Aba com pendências e divergências do mês</li>
+      </ul>
+    </div>
+
+  </div>
+</template>
+
+<script setup lang="ts">
+import { consolidadoMensalSchema } from '~/schemas/relatorio.schema'
+import type { ConsolidadoMensalForm } from '~/schemas/relatorio.schema'
+
+const auth = useAuthStore()
+const { baixando, erro, sucesso, baixarConsolidado, limparFeedback } = useConsolidadoMensal()
+
+const isAdmin = computed(() => auth.perfil === 'admin_ia16')
+
+const agora = new Date()
+const form = reactive<ConsolidadoMensalForm>({
+  ano: agora.getFullYear(),
+  mes: agora.getMonth() + 1,
+  tipo_conciliacao: '',
+  empresa_id: undefined,
+})
+
+const erros = reactive<Partial<Record<keyof ConsolidadoMensalForm, string>>>({})
+
+const feedbackMensagem = ref<string | null>(null)
+const feedbackTipo = ref<'sucesso' | 'erro'>('sucesso')
+
+const meses = [
+  { valor: 1, label: 'Janeiro' }, { valor: 2, label: 'Fevereiro' },
+  { valor: 3, label: 'Março' }, { valor: 4, label: 'Abril' },
+  { valor: 5, label: 'Maio' }, { valor: 6, label: 'Junho' },
+  { valor: 7, label: 'Julho' }, { valor: 8, label: 'Agosto' },
+  { valor: 9, label: 'Setembro' }, { valor: 10, label: 'Outubro' },
+  { valor: 11, label: 'Novembro' }, { valor: 12, label: 'Dezembro' },
+]
+
+const anoAtual = agora.getFullYear()
+const anos = Array.from({ length: 5 }, (_, i) => anoAtual - i)
+
+const tiposConciliacao = [
+  { valor: 'extrato_anotado', label: 'Extrato Anotado' },
+  { valor: 'bancaria', label: 'Bancária' },
+  { valor: 'caixa', label: 'Caixa' },
+  { valor: 'recebiveis', label: 'Recebíveis' },
+  { valor: 'caixa_recebiveis', label: 'Caixa + Recebíveis' },
+  { valor: 'vendas_recebimentos', label: 'Vendas e Recebimentos' },
+  { valor: 'adquirentes', label: 'Adquirentes' },
+  { valor: 'outro', label: 'Outro' },
+]
+
+function exibirFeedback(tipo: 'sucesso' | 'erro', mensagem: string) {
+  feedbackTipo.value = tipo
+  feedbackMensagem.value = mensagem
+  setTimeout(() => {
+    feedbackMensagem.value = null
+    limparFeedback()
+  }, 6000)
+}
+
+function validar(): boolean {
+  Object.keys(erros).forEach(k => delete (erros as any)[k])
+
+  const resultado = consolidadoMensalSchema.safeParse(form)
+  if (!resultado.success) {
+    for (const issue of resultado.error.issues) {
+      const campo = issue.path[0] as keyof ConsolidadoMensalForm
+      if (campo && !erros[campo]) erros[campo] = issue.message
+    }
+    return false
+  }
+
+  if (isAdmin.value && !form.empresa_id?.trim()) {
+    erros.empresa_id = 'ID da empresa é obrigatório para administradores.'
+    return false
+  }
+
+  return true
+}
+
+async function onSubmit() {
+  if (!validar()) return
+
+  const ok = await baixarConsolidado(form)
+  if (ok) {
+    exibirFeedback('sucesso', 'Consolidado mensal exportado com sucesso.')
+  } else if (erro.value) {
+    exibirFeedback('erro', erro.value)
+  }
+}
+</script>
