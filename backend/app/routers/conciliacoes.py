@@ -153,6 +153,100 @@ def resumo_conciliacoes(
     return RespostaSucesso(dados=resumo)
 
 
+# ── GET /exportar-mensal ──────────────────────────────────────────────────────
+# IMPORTANTE: deve ficar antes de /{conciliacao_id} para não ser capturado
+# pela rota dinâmica do FastAPI/Starlette (ordem de registro importa).
+
+@router.get(
+    "/exportar-mensal",
+    responses={
+        400: {"model": RespostaErro},
+        403: {"model": RespostaErro},
+        404: {"model": RespostaErro},
+        422: {"model": RespostaErro},
+    },
+)
+def exportar_consolidado_mensal(
+    usuario: Annotated[Usuario, Depends(get_usuario_atual)],
+    db: Annotated[Session, Depends(get_db)],
+    ano: int = Query(..., ge=2000, le=2100, description="Ano do consolidado"),
+    mes: int = Query(..., ge=1, le=12, description="Mês do consolidado (1-12)"),
+    tipo_conciliacao: str = Query(..., description="Tipo de conciliação"),
+    empresa_id: Optional[str] = Query(None, description="ID da empresa (obrigatório para admin_ia16)"),
+    status_incluidos: Optional[str] = Query(
+        None,
+        description="Status incluídos separados por vírgula. Padrão: processado,com_divergencias,aprovado,reaberto",
+    ),
+):
+    """
+    Gera e retorna o consolidado mensal de conciliações em formato Excel (.xlsx).
+
+    Restrições:
+    - Usuários comuns só podem exportar a empresa vinculada ao seu perfil.
+    - Admin iA16 deve informar empresa_id.
+    - Nunca mistura dados de empresas distintas.
+    """
+    # Resolver empresa_id conforme perfil
+    if usuario.perfil == "admin_ia16":
+        if not empresa_id:
+            raise HTTPException(
+                status_code=400,
+                detail={"sucesso": False, "erro": {"codigo": "EMPRESA_OBRIGATORIA", "mensagem": "empresa_id é obrigatório para admin_ia16."}},
+            )
+        empresa_alvo_id = empresa_id
+    else:
+        empresa_alvo_id = str(usuario.empresa_id)
+        if not empresa_alvo_id:
+            raise HTTPException(
+                status_code=400,
+                detail={"sucesso": False, "erro": {"codigo": "USUARIO_SEM_EMPRESA", "mensagem": "Usuário sem empresa vinculada."}},
+            )
+        # Garantir que não tente acessar outra empresa
+        if empresa_id and empresa_id != empresa_alvo_id:
+            raise HTTPException(
+                status_code=403,
+                detail={"sucesso": False, "erro": {"codigo": "SEM_PERMISSAO_EMPRESA", "mensagem": "Sem permissão para exportar dados de outra empresa."}},
+            )
+
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_alvo_id).first()
+    if not empresa:
+        raise HTTPException(
+            status_code=404,
+            detail={"sucesso": False, "erro": {"codigo": "EMPRESA_NAO_ENCONTRADA", "mensagem": "Empresa não encontrada."}},
+        )
+
+    # Resolver status_incluidos
+    status_set = None
+    if status_incluidos:
+        status_set = {s.strip() for s in status_incluidos.split(",") if s.strip()}
+
+    try:
+        conteudo, nome_arquivo = gerar_excel_mensal(
+            db=db,
+            empresa_id=empresa.id,
+            ano=ano,
+            mes=mes,
+            tipo_conciliacao=tipo_conciliacao,
+            status_incluidos=status_set,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"sucesso": False, "erro": {"codigo": "SEM_CONCILIACOES_NO_PERIODO", "mensagem": str(exc)}},
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"sucesso": False, "erro": {"codigo": "ERRO_GERACAO_CONSOLIDADO", "mensagem": "Erro ao gerar o consolidado mensal."}},
+        ) from exc
+
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
+
+
 @router.get("/{conciliacao_id}", response_model=RespostaSucesso[ConciliacaoDetalhe])
 def obter_conciliacao(
     conciliacao_id: str,
@@ -404,98 +498,6 @@ def reabrir_conciliacao(
             reaberto_por_usuario_id=usuario.id,
         ),
         mensagem="Fechamento reaberto para revisão.",
-    )
-
-
-# ── GET /exportar-mensal ──────────────────────────────────────────────────────
-
-@router.get(
-    "/exportar-mensal",
-    responses={
-        400: {"model": RespostaErro},
-        403: {"model": RespostaErro},
-        404: {"model": RespostaErro},
-        422: {"model": RespostaErro},
-    },
-)
-def exportar_consolidado_mensal(
-    usuario: Annotated[Usuario, Depends(get_usuario_atual)],
-    db: Annotated[Session, Depends(get_db)],
-    ano: int = Query(..., ge=2000, le=2100, description="Ano do consolidado"),
-    mes: int = Query(..., ge=1, le=12, description="Mês do consolidado (1-12)"),
-    tipo_conciliacao: str = Query(..., description="Tipo de conciliação"),
-    empresa_id: Optional[str] = Query(None, description="ID da empresa (obrigatório para admin_ia16)"),
-    status_incluidos: Optional[str] = Query(
-        None,
-        description="Status incluídos separados por vírgula. Padrão: processado,com_divergencias,aprovado,reaberto",
-    ),
-):
-    """
-    Gera e retorna o consolidado mensal de conciliações em formato Excel (.xlsx).
-
-    Restrições:
-    - Usuários comuns só podem exportar a empresa vinculada ao seu perfil.
-    - Admin iA16 deve informar empresa_id.
-    - Nunca mistura dados de empresas distintas.
-    """
-    # Resolver empresa_id conforme perfil
-    if usuario.perfil == "admin_ia16":
-        if not empresa_id:
-            raise HTTPException(
-                status_code=400,
-                detail={"sucesso": False, "erro": {"codigo": "EMPRESA_OBRIGATORIA", "mensagem": "empresa_id é obrigatório para admin_ia16."}},
-            )
-        empresa_alvo_id = empresa_id
-    else:
-        empresa_alvo_id = str(usuario.empresa_id)
-        if not empresa_alvo_id:
-            raise HTTPException(
-                status_code=400,
-                detail={"sucesso": False, "erro": {"codigo": "USUARIO_SEM_EMPRESA", "mensagem": "Usuário sem empresa vinculada."}},
-            )
-        # Garantir que não tente acessar outra empresa
-        if empresa_id and empresa_id != empresa_alvo_id:
-            raise HTTPException(
-                status_code=403,
-                detail={"sucesso": False, "erro": {"codigo": "SEM_PERMISSAO_EMPRESA", "mensagem": "Sem permissão para exportar dados de outra empresa."}},
-            )
-
-    empresa = db.query(Empresa).filter(Empresa.id == empresa_alvo_id).first()
-    if not empresa:
-        raise HTTPException(
-            status_code=404,
-            detail={"sucesso": False, "erro": {"codigo": "EMPRESA_NAO_ENCONTRADA", "mensagem": "Empresa não encontrada."}},
-        )
-
-    # Resolver status_incluidos
-    status_set = None
-    if status_incluidos:
-        status_set = {s.strip() for s in status_incluidos.split(",") if s.strip()}
-
-    try:
-        conteudo, nome_arquivo = gerar_excel_mensal(
-            db=db,
-            empresa_id=empresa.id,
-            ano=ano,
-            mes=mes,
-            tipo_conciliacao=tipo_conciliacao,
-            status_incluidos=status_set,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=404,
-            detail={"sucesso": False, "erro": {"codigo": "SEM_CONCILIACOES_NO_PERIODO", "mensagem": str(exc)}},
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail={"sucesso": False, "erro": {"codigo": "ERRO_GERACAO_CONSOLIDADO", "mensagem": "Erro ao gerar o consolidado mensal."}},
-        ) from exc
-
-    return Response(
-        content=conteudo,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
     )
 
 

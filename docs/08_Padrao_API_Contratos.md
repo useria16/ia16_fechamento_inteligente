@@ -339,11 +339,84 @@ Cada contrato deve seguir este formato:
 /api/v1/fechamentos/{id}/relatorio
 /api/v1/fechamentos/{id}/exportar
 
+/api/v1/conciliacoes/exportar-mensal
+
 /api/v1/dashboard/resumo
 /api/v1/logs-processamento
 ```
 
-## 16. Regra final
+## 16. Contrato — Exportação Consolidada Mensal
+
+### `GET /api/v1/conciliacoes/exportar-mensal`
+
+Gera e retorna uma planilha Excel consolidando todas as conciliações de uma empresa, tipo e mês.
+
+**Importante:** esta rota estática deve estar registrada antes de `/{conciliacao_id}` no router para não ser capturada pela rota dinâmica (FastAPI/Starlette resolve por ordem de registro).
+
+#### Query params
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|---|---|---|---|
+| `ano` | inteiro | sim | Ano do consolidado. Entre 2000 e 2100. |
+| `mes` | inteiro | sim | Mês do consolidado. Entre 1 e 12. |
+| `tipo_conciliacao` | string | sim | Tipo de conciliação (ex: `extrato_anotado`, `bancaria`). |
+| `empresa_id` | string (UUID) | condicional | Obrigatório para `admin_ia16`. Ignorado para usuários comuns (usa empresa do perfil). |
+| `status_incluidos` | string | não | Status separados por vírgula. Padrão: `processado,com_divergencias,aprovado,reaberto`. |
+
+#### Comportamento por perfil
+
+| Perfil | Comportamento |
+|---|---|
+| `cliente_operador`, `cliente_admin` | Exporta somente a empresa vinculada ao perfil. `empresa_id` é ignorado se informado. |
+| `admin_ia16` | Deve informar `empresa_id`. Pode exportar qualquer empresa. |
+
+#### Regras
+
+- O endpoint nunca mistura dados de empresas diferentes.
+- O período é determinado pelo campo `periodo_inicio` do fechamento.
+- Conciliações com `periodo_inicio` no mês/ano informado são incluídas.
+- Conciliações fora do mês não são incluídas.
+
+#### Resposta de sucesso — `200 OK`
+
+```
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+Content-Disposition: attachment; filename="ia16_consolidado_<empresa>_<tipo>_<ano>_<mes>.xlsx"
+```
+
+Corpo: binário do arquivo Excel com 4 abas:
+- **Resumo Mensal** — totais agregados do período
+- **Conciliação Mensal** — todos os lançamentos do mês
+- **Dias Incluídos** — lista de fechamentos com totais por dia
+- **Pendências** — lançamentos com status pendente ou divergente
+
+#### Erros
+
+| HTTP | Código | Quando |
+|---|---|---|
+| `400` | `EMPRESA_OBRIGATORIA` | `admin_ia16` não informou `empresa_id`. |
+| `400` | `USUARIO_SEM_EMPRESA` | Usuário não tem empresa vinculada. |
+| `403` | `SEM_PERMISSAO_EMPRESA` | Usuário tentou informar `empresa_id` diferente da própria empresa. |
+| `404` | `EMPRESA_NAO_ENCONTRADA` | `empresa_id` não existe no banco. |
+| `404` | `SEM_CONCILIACOES_NO_PERIODO` | Nenhuma conciliação encontrada para o mês/tipo informados. |
+| `422` | — | Query params obrigatórios ausentes ou inválidos (FastAPI padrão). |
+| `500` | `ERRO_GERACAO_CONSOLIDADO` | Falha inesperada ao gerar o Excel. |
+
+#### Exemplo de request
+
+```
+GET /api/v1/conciliacoes/exportar-mensal?ano=2026&mes=6&tipo_conciliacao=extrato_anotado
+Authorization: Bearer <token>
+```
+
+#### Exemplo com admin
+
+```
+GET /api/v1/conciliacoes/exportar-mensal?ano=2026&mes=6&tipo_conciliacao=extrato_anotado&empresa_id=<uuid>
+Authorization: Bearer <token>
+```
+
+## 18. Regra final
 
 Nenhuma tela do frontend deve ser implementada consumindo payloads inventados.
 
