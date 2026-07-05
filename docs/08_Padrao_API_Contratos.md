@@ -382,22 +382,26 @@ Gera e retorna uma planilha Excel com todos os lançamentos conciliados de uma e
 
 ```
 Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-Content-Disposition: attachment; filename="ia16_conciliacao_mensal_<empresa>_<tipo>_<ano>_<mes>.xlsx"
+Content-Disposition: attachment; filename="Conciliacao_<Nome_da_Empresa>_<Nome_do_Mes>_<Ano>.xlsx"
 ```
+
+Exemplo de nome: `Conciliacao_Empresa_Exemplo_Junho_2026.xlsx`
 
 Corpo: binário do arquivo Excel com **uma única aba** no layout da planilha conciliada mensal:
 
 | Linha | Conteúdo |
 |---|---|
-| 1 | `Atualização:` / data e hora da geração |
-| 2 | `Nome:` / nome da empresa |
-| 3 | `Agência:` / agência (em branco até o modelo suportar) |
-| 4 | `Conta:` / conta (em branco até o modelo suportar) |
+| 1 | `Atualização:` / `metadados["atualizacao"]` do arquivo de extrato, ou data/hora atual como fallback |
+| 2 | `Nome:` / `metadados["nome"]` do arquivo de extrato, ou nome da empresa como fallback |
+| 3 | `Agência:` / `metadados["agencia"]` do arquivo de extrato, ou vazio se não disponível |
+| 4 | `Conta:` / `metadados["conta"]` do arquivo de extrato, ou vazio se não disponível |
 | 5 | (vazia) |
 | 6 | `Periodo:  <Mês>/<Ano>` |
 | 7 | (vazia) |
 | 8 | Cabeçalho da tabela |
 | 9+ | Lançamentos acumulados do mês |
+
+**Metadados:** o service busca o primeiro `ArquivoEnviado` com `tipo_arquivo = "extrato_bancario"` vinculado aos fechamentos do mês. Se nenhum arquivo tiver metadados preenchidos, os campos `Agência` e `Conta` ficam em branco, e `Nome` usa o nome da empresa.
 
 Colunas da tabela (linha 8):
 

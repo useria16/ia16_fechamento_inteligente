@@ -17,6 +17,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from sqlalchemy.orm import Session
 
+from app.models.arquivo_enviado import ArquivoEnviado
 from app.models.empresa import Empresa
 from app.models.fechamento_financeiro import FechamentoFinanceiro
 from app.models.item_conciliacao import ItemConciliacao
@@ -65,6 +66,11 @@ def _sanitizar_nome(valor: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "_", valor.strip().lower())
 
 
+def _sanitizar_nome_arquivo(valor: str) -> str:
+    """Sanitiza o nome para uso em nome de arquivo, preservando maiúsculas."""
+    return re.sub(r'[/\\:*?"<>|. ]', "_", valor.strip())
+
+
 def _fmt_data(valor) -> str:
     if valor is None:
         return ""
@@ -89,6 +95,31 @@ def _ajustar_largura(ws) -> None:
     for col in ws.columns:
         max_len = max((len(str(c.value)) if c.value is not None else 0) for c in col)
         ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 60)
+
+
+# ── busca de metadados do arquivo de extrato ─────────────────────────────────
+
+def _buscar_metadados_extrato(db: Session, ids_fechamentos: list) -> dict:
+    """
+    Busca os metadados do arquivo de extrato bancário vinculado aos fechamentos.
+
+    Percorre os fechamentos em ordem e retorna os metadados do primeiro arquivo
+    de extrato_bancario que tiver metadados preenchidos.
+
+    Retorna dict vazio se nenhum arquivo tiver metadados disponíveis.
+    """
+    for fech_id in ids_fechamentos:
+        arquivo = (
+            db.query(ArquivoEnviado)
+            .filter(
+                ArquivoEnviado.fechamento_id == fech_id,
+                ArquivoEnviado.tipo_arquivo == "extrato_bancario",
+            )
+            .first()
+        )
+        if arquivo and arquivo.metadados:
+            return arquivo.metadados
+    return {}
 
 
 # ── busca de fechamentos ───────────────────────────────────────────────────────
@@ -128,35 +159,50 @@ def buscar_fechamentos_do_mes(
 
 # ── construção da aba mensal ──────────────────────────────────────────────────
 
-def _montar_cabecalho_empresa(ws, empresa_nome: str, mes: int, ano: int) -> None:
+def _montar_cabecalho_empresa(
+    ws,
+    empresa_nome: str,
+    mes: int,
+    ano: int,
+    metadados: dict | None = None,
+) -> None:
     """
     Preenche as linhas de cabeçalho da empresa acima da tabela de lançamentos.
 
+    Usa metadados do arquivo de extrato quando disponíveis (atualizacao, nome,
+    agencia, conta). Fallback para data/hora atual e nome da empresa.
+
     Estrutura:
-      Linha 1: Atualização:  <data/hora>
-      Linha 2: Nome:         <empresa>
-      Linha 3: Agência:      (em branco — campo não disponível no modelo atual)
-      Linha 4: Conta:        (em branco — campo não disponível no modelo atual)
+      Linha 1: Atualização:  <metadados["atualizacao"] ou data/hora atual>
+      Linha 2: Nome:         <metadados["nome"] ou nome da empresa>
+      Linha 3: Agência:      <metadados["agencia"] ou vazio>
+      Linha 4: Conta:        <metadados["conta"] ou vazio>
       Linha 5: (vazia)
       Linha 6: Periodo:  <Mês>/<Ano>
       Linha 7: (vazia)
     """
+    meta = metadados or {}
     agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     periodo = f"{MESES_PT.get(mes, str(mes))}/{ano}"
+
+    atualizacao = meta.get("atualizacao") or agora
+    nome_banco = meta.get("nome") or empresa_nome
+    agencia = meta.get("agencia") or ""
+    conta = meta.get("conta") or ""
 
     font_label = Font(bold=True)
 
     ws.cell(row=1, column=1, value="Atualização:").font = font_label
-    ws.cell(row=1, column=2, value=agora)
+    ws.cell(row=1, column=2, value=atualizacao)
 
     ws.cell(row=2, column=1, value="Nome:").font = font_label
-    ws.cell(row=2, column=2, value=empresa_nome)
+    ws.cell(row=2, column=2, value=nome_banco)
 
     ws.cell(row=3, column=1, value="Agência:").font = font_label
-    ws.cell(row=3, column=2, value="")
+    ws.cell(row=3, column=2, value=agencia)
 
     ws.cell(row=4, column=1, value="Conta:").font = font_label
-    ws.cell(row=4, column=2, value="")
+    ws.cell(row=4, column=2, value=conta)
 
     # Linha 5 vazia
 
@@ -264,11 +310,14 @@ def gerar_excel_mensal(
 
     ids_fechamentos = [f.id for f in fechamentos]
 
+    # Busca metadados do arquivo de extrato para preencher cabeçalho
+    metadados = _buscar_metadados_extrato(db, ids_fechamentos)
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = _nome_aba(mes, ano)
 
-    _montar_cabecalho_empresa(ws, empresa_nome, mes, ano)
+    _montar_cabecalho_empresa(ws, empresa_nome, mes, ano, metadados)
     _montar_cabecalho_tabela(ws)
 
     if tipo_conciliacao == "extrato_anotado":
@@ -300,8 +349,9 @@ def gerar_excel_mensal(
     buffer.seek(0)
     conteudo = buffer.read()
 
-    empresa_slug = _sanitizar_nome(empresa_nome)
-    tipo_slug = _sanitizar_nome(tipo_conciliacao)
-    nome_arquivo = f"ia16_conciliacao_mensal_{empresa_slug}_{tipo_slug}_{ano}_{mes:02d}.xlsx"
+    # Nome amigável: Conciliacao_<Empresa>_<Mes>_<Ano>.xlsx
+    nome_mes = MESES_PT.get(mes, str(mes))
+    empresa_slug = _sanitizar_nome_arquivo(empresa_nome)
+    nome_arquivo = f"Conciliacao_{empresa_slug}_{nome_mes}_{ano}.xlsx"
 
     return conteudo, nome_arquivo

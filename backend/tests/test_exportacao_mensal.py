@@ -8,13 +8,15 @@ Cobre:
   4. Filtra por tipo de conciliação.
   5. Inclui múltiplos dias do mesmo mês.
   6. Exclui conciliações fora do mês.
-  7. Gera workbook válido com uma única aba.
+  7. Gera workbook com uma única aba.
   8. Aba tem nome no formato mês+ano (ex: Jun26).
   9. Aba NÃO contém abas antigas (Resumo Mensal, Conciliação Mensal, etc.).
  10. Cabeçalho da tabela está na linha 8 com as colunas corretas.
  11. Lançamentos aparecem a partir da linha 9.
- 12. Nome do arquivo segue o padrão ia16_conciliacao_mensal_*.
+ 12. Nome do arquivo segue o padrão Conciliacao_<Empresa>_<Mes>_<Ano>.xlsx.
  13. Dados de entrada e saída separados corretamente.
+ 14. Cabeçalho usa metadados do arquivo de extrato quando disponíveis.
+ 15. Fallback seguro quando não há metadados.
 """
 import io
 import uuid
@@ -106,7 +108,15 @@ def _make_empresa(eid=EMPRESA_A, nome="Empresa Teste"):
     return e
 
 
-def _db_com_fechamentos(fechamentos, lancamentos=None, empresa=None):
+def _make_arquivo(fechamento_id=FECH_1, metadados=None):
+    a = MagicMock()
+    a.fechamento_id = fechamento_id
+    a.tipo_arquivo = "extrato_bancario"
+    a.metadados = metadados or {}
+    return a
+
+
+def _db_com_fechamentos(fechamentos, lancamentos=None, empresa=None, arquivo_extrato=None):
     """Cria um mock de db que retorna os dados fornecidos."""
     db = MagicMock()
     empresa_obj = empresa or _make_empresa()
@@ -125,16 +135,23 @@ def _db_com_fechamentos(fechamentos, lancamentos=None, empresa=None):
     q_lanc.order_by.return_value = q_lanc
     q_lanc.all.return_value = lancamentos or []
 
+    q_arq = MagicMock()
+    q_arq.filter.return_value = q_arq
+    q_arq.first.return_value = arquivo_extrato  # None = sem arquivo
+
     def side_effect_query(model):
         from app.models.fechamento_financeiro import FechamentoFinanceiro
         from app.models.empresa import Empresa
         from app.models.lancamento_extrato_anotado import LancamentoExtratoAnotado
+        from app.models.arquivo_enviado import ArquivoEnviado
         if model is FechamentoFinanceiro:
             return q_fech
         if model is Empresa:
             return q_emp
         if model is LancamentoExtratoAnotado:
             return q_lanc
+        if model is ArquivoEnviado:
+            return q_arq
         return MagicMock()
 
     db.query.side_effect = side_effect_query
@@ -171,7 +188,7 @@ def test_isolamento_por_empresa():
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
     assert len(conteudo) > 0
-    assert "empresa_teste" in nome or "2026_06" in nome
+    assert "2026" in nome
     assert db.query.called
 
 
@@ -184,7 +201,8 @@ def test_filtra_por_tipo_conciliacao():
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
     assert len(conteudo) > 0
-    assert "extrato_anotado" in nome
+    # nome não deve conter o tipo_conciliacao
+    assert "extrato_anotado" not in nome
 
 
 # ── Teste 5: inclui múltiplos dias do mesmo mês ───────────────────────────────
@@ -261,7 +279,6 @@ def test_nome_aba_diferentes_meses():
 # ── Teste 9: NÃO contém abas antigas ─────────────────────────────────────────
 
 def test_nao_contem_abas_antigas():
-    """A exportação mensal não deve mais gerar abas do formato antigo."""
     fech = _make_fechamento()
     l = _make_lancamento()
     db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
@@ -270,10 +287,10 @@ def test_nao_contem_abas_antigas():
     )
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
     abas = wb.sheetnames
-    assert "Resumo Mensal" not in abas, "Aba 'Resumo Mensal' não deve existir"
-    assert "Conciliação Mensal" not in abas, "Aba 'Conciliação Mensal' não deve existir"
-    assert "Dias Incluídos" not in abas, "Aba 'Dias Incluídos' não deve existir"
-    assert "Pendências" not in abas, "Aba 'Pendências' não deve existir"
+    assert "Resumo Mensal" not in abas
+    assert "Conciliação Mensal" not in abas
+    assert "Dias Incluídos" not in abas
+    assert "Pendências" not in abas
 
 
 # ── Teste 10: cabeçalho da tabela na linha 8 com colunas corretas ────────────
@@ -304,21 +321,34 @@ def test_lancamentos_a_partir_da_linha_9():
     ws = wb.active
     primeira_linha_dados = _LINHA_CABECALHO_TABELA + 1
     descricao = ws.cell(row=primeira_linha_dados, column=2).value
-    assert descricao == "TED recebida teste", f"Descrição esperada na linha {primeira_linha_dados}, recebeu: {descricao}"
+    assert descricao == "TED recebida teste", f"Descrição na linha {primeira_linha_dados}: {descricao}"
 
 
-# ── Teste 12: nome do arquivo segue padrão ia16_conciliacao_mensal_* ─────────
+# ── Teste 12: nome do arquivo segue padrão Conciliacao_<Empresa>_<Mes>_<Ano> ─
 
-def test_nome_arquivo_padrao():
+def test_nome_arquivo_padrao_amigavel():
     fech = _make_fechamento()
     l = _make_lancamento()
     db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
     _, nome = gerar_excel_mensal(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
-    assert nome.startswith("ia16_conciliacao_mensal_"), f"Nome não segue padrão: {nome}"
-    assert "2026_06" in nome
+    assert nome.startswith("Conciliacao_"), f"Nome não começa com 'Conciliacao_': {nome}"
+    assert "Junho" in nome, f"Nome do mês por extenso ausente: {nome}"
+    assert "2026" in nome, f"Ano ausente no nome: {nome}"
     assert nome.endswith(".xlsx")
+
+
+def test_nome_arquivo_nao_contem_padroes_antigos():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    _, nome = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    assert "ia16_" not in nome, f"Nome não deve conter 'ia16_': {nome}"
+    assert "extrato_anotado" not in nome, f"Nome não deve conter tipo de conciliação: {nome}"
+    assert "_06" not in nome, f"Nome não deve conter mês numérico: {nome}"
 
 
 # ── Teste 13: entrada e saída separados corretamente ─────────────────────────
@@ -334,7 +364,7 @@ def test_entrada_saida_separados():
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
     ws = wb.active
 
-    col_entrada = _COLUNAS_MENSAL.index("ENTRADA EXTRATO") + 1  # 1-based
+    col_entrada = _COLUNAS_MENSAL.index("ENTRADA EXTRATO") + 1
     col_saida = _COLUNAS_MENSAL.index("SAIDA EXTRATO") + 1
 
     linha_entrada = _LINHA_CABECALHO_TABELA + 1
@@ -345,3 +375,58 @@ def test_entrada_saida_separados():
 
     assert ws.cell(row=linha_saida, column=col_saida).value == 300.0
     assert ws.cell(row=linha_saida, column=col_entrada).value in (None, "")
+
+
+# ── Teste 14: cabeçalho usa metadados do arquivo de extrato ──────────────────
+
+def test_cabecalho_usa_metadados_do_extrato():
+    """Quando há arquivo de extrato com metadados, o cabeçalho usa esses dados."""
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    arquivo = _make_arquivo(
+        fechamento_id=FECH_1,
+        metadados={
+            "atualizacao": "10/06/2026 09:00:00",
+            "nome": "BANCO EXEMPLO S/A",
+            "agencia": "0123",
+            "conta": "9876543-2",
+        },
+    )
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l], arquivo_extrato=arquivo)
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+
+    assert ws.cell(row=1, column=2).value == "10/06/2026 09:00:00", "Atualização incorreta"
+    assert ws.cell(row=2, column=2).value == "BANCO EXEMPLO S/A", "Nome do banco incorreto"
+    assert ws.cell(row=3, column=2).value == "0123", "Agência incorreta"
+    assert ws.cell(row=4, column=2).value == "9876543-2", "Conta incorreta"
+
+
+# ── Teste 15: fallback seguro quando não há metadados ────────────────────────
+
+def test_cabecalho_fallback_sem_metadados():
+    """Quando não há arquivo de extrato, o cabeçalho usa fallback sem erros."""
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    empresa = _make_empresa(nome="Empresa Sem Extrato")
+    # arquivo_extrato=None → sem arquivo
+    db = _db_com_fechamentos(
+        fechamentos=[fech], lancamentos=[l], empresa=empresa, arquivo_extrato=None
+    )
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+
+    # Nome da empresa como fallback
+    assert ws.cell(row=2, column=2).value == "Empresa Sem Extrato", "Fallback de nome deve usar empresa"
+    # Agência e conta devem estar em branco
+    assert ws.cell(row=3, column=2).value in (None, ""), "Agência deve estar vazia sem metadados"
+    assert ws.cell(row=4, column=2).value in (None, ""), "Conta deve estar vazia sem metadados"
+    # Atualização deve ser uma string não vazia (data/hora atual)
+    atualizacao = ws.cell(row=1, column=2).value
+    assert atualizacao and len(str(atualizacao)) > 5, "Atualização deve ter valor de fallback"
