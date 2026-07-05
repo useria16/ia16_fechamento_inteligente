@@ -46,20 +46,12 @@
         </div>
       </div>
 
-      <!-- Modelo de conciliação -->
+      <!-- Modelo de conciliação — fixo nesta versão -->
       <div class="space-y-1">
-        <label class="block text-xs font-medium text-slate-600">Modelo de conciliação <span class="text-red-400">*</span></label>
-        <select
-          v-model="form.tipo_conciliacao"
-          class="w-full rounded-lg border px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          :class="erros.tipo_conciliacao ? 'border-red-400' : 'border-slate-200'"
-        >
-          <option value="">Selecione...</option>
-          <option v-for="tipo in modelos" :key="tipo.valor" :value="tipo.valor">
-            {{ tipo.label }}
-          </option>
-        </select>
-        <p v-if="erros.tipo_conciliacao" class="text-xs text-red-500">{{ erros.tipo_conciliacao }}</p>
+        <label class="block text-xs font-medium text-slate-600">Modelo de conciliação</label>
+        <p class="text-sm text-slate-700 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+          Extrato Anotado
+        </p>
       </div>
 
       <!-- Empresa — apenas admin_ia16 -->
@@ -180,16 +172,6 @@ const meses = [
 const anoAtual = agora.getFullYear()
 const anos = Array.from({ length: 5 }, (_, i) => anoAtual - i)
 
-const modelos = [
-  { valor: 'extrato_anotado',      label: 'Extrato Anotado' },
-  { valor: 'bancaria',             label: 'Bancária' },
-  { valor: 'caixa',                label: 'Caixa' },
-  { valor: 'recebiveis',           label: 'Recebíveis' },
-  { valor: 'caixa_recebiveis',     label: 'Caixa + Recebíveis' },
-  { valor: 'vendas_recebimentos',  label: 'Vendas e Recebimentos' },
-  { valor: 'adquirentes',          label: 'Adquirentes' },
-  { valor: 'outro',                label: 'Outro' },
-]
 
 function exibirFeedback(tipo: 'sucesso' | 'erro', mensagem: string) {
   feedbackTipo.value = tipo
