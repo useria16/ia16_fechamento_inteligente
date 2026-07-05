@@ -115,13 +115,11 @@
 
     <!-- Informativo -->
     <div class="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3 text-xs text-slate-500 space-y-1">
-      <p class="font-medium text-slate-600">O consolidado inclui:</p>
+      <p class="font-medium text-slate-600">A planilha mensal inclui:</p>
       <ul class="list-disc list-inside space-y-0.5 pl-1">
-        <li>Todas as conciliações aprovadas ou processadas do mês</li>
-        <li>Resumo com totais do período</li>
-        <li>Todos os lançamentos do mês em uma única planilha</li>
-        <li>Lista dos dias incluídos com totais por dia</li>
-        <li>Pendências e divergências do mês</li>
+        <li>Todos os lançamentos aprovados ou processados do mês</li>
+        <li>Lançamentos acumulados em ordem por data em uma única aba</li>
+        <li>Colunas: data, descrição, fornecedor, NF/doc, entrada, saída e saldo</li>
       </ul>
     </div>
 

@@ -1,5 +1,5 @@
 """
-Testes do service de exportação mensal consolidada (exportacao_mensal_service).
+Testes do service de exportação mensal de conciliação (exportacao_mensal_service).
 
 Cobre:
   1. Exportação diária existente continua funcionando (smoke test do import).
@@ -8,11 +8,13 @@ Cobre:
   4. Filtra por tipo de conciliação.
   5. Inclui múltiplos dias do mesmo mês.
   6. Exclui conciliações fora do mês.
-  7. Gera workbook válido.
-  8. Workbook contém abas esperadas.
-  9. Aba Conciliação Mensal contém lançamentos de mais de um dia.
- 10. Aba Dias Incluídos lista os fechamentos incluídos.
- 11. Testa com dados de extrato_anotado.
+  7. Gera workbook válido com uma única aba.
+  8. Aba tem nome no formato mês+ano (ex: Jun26).
+  9. Aba NÃO contém abas antigas (Resumo Mensal, Conciliação Mensal, etc.).
+ 10. Cabeçalho da tabela está na linha 8 com as colunas corretas.
+ 11. Lançamentos aparecem a partir da linha 9.
+ 12. Nome do arquivo segue o padrão ia16_conciliacao_mensal_*.
+ 13. Dados de entrada e saída separados corretamente.
 """
 import io
 import uuid
@@ -26,6 +28,9 @@ import openpyxl
 from app.services.exportacao_mensal_service import (
     buscar_fechamentos_do_mes,
     gerar_excel_mensal,
+    _nome_aba,
+    _COLUNAS_MENSAL,
+    _LINHA_CABECALHO_TABELA,
 )
 from app.services.exportacao_fechamento_service import gerar_excel_fechamento
 
@@ -38,7 +43,6 @@ FECH_1 = uuid.UUID("00000000-1111-0000-0000-000000000001")
 FECH_2 = uuid.UUID("00000000-2222-0000-0000-000000000002")
 FECH_3 = uuid.UUID("00000000-3333-0000-0000-000000000003")
 ARQ_1 = uuid.UUID("00000000-0000-1111-0000-000000000001")
-ARQ_2 = uuid.UUID("00000000-0000-2222-0000-000000000002")
 
 
 def _make_fechamento(
@@ -48,10 +52,6 @@ def _make_fechamento(
     status="aprovado",
     periodo_inicio=date(2026, 6, 1),
     titulo="Conciliação 01/06",
-    qtd_registros=5,
-    qtd_conciliados=4,
-    qtd_divergentes=1,
-    qtd_pendentes=0,
 ):
     f = MagicMock()
     f.id = fid
@@ -61,22 +61,6 @@ def _make_fechamento(
     f.periodo_inicio = periodo_inicio
     f.periodo_fim = periodo_inicio
     f.titulo = titulo
-    f.quantidade_registros = qtd_registros
-    f.quantidade_conciliados = qtd_conciliados
-    f.quantidade_divergentes = qtd_divergentes
-    f.quantidade_pendentes = qtd_pendentes
-    f.valor_total_processado = Decimal("10000.00")
-    f.valor_total_conciliado = Decimal("9000.00")
-    f.valor_total_divergente = Decimal("1000.00")
-    f.aprovado_em = None
-    f.aprovado_por_usuario_id = None
-    f.reaberto_em = None
-    f.reaberto_por_usuario_id = None
-    f.motivo_reabertura = None
-    f.observacao_aprovacao = None
-    f.criado_em = None
-    f.atualizado_em = None
-    f.criado_por_usuario_id = None
     return f
 
 
@@ -94,13 +78,6 @@ def _make_lancamento(
     tipo_conferencia_fluxo="encontrado",
     nf_doc=None,
     valor_nf_doc=None,
-    categoria=None,
-    categoria_sugerida=None,
-    observacao=None,
-    observacao_sistema=None,
-    data_prevista=None,
-    valor_previsto=None,
-    descricao_prevista=None,
     linha_origem=1,
 ):
     l = MagicMock()
@@ -118,19 +95,7 @@ def _make_lancamento(
     l.tipo_conferencia_fluxo = tipo_conferencia_fluxo
     l.nf_doc = nf_doc
     l.valor_nf_doc = valor_nf_doc
-    l.categoria = categoria
-    l.categoria_sugerida = categoria_sugerida
-    l.observacao = observacao
-    l.observacao_sistema = observacao_sistema
-    l.data_prevista = data_prevista
-    l.valor_previsto = valor_previsto
-    l.descricao_prevista = descricao_prevista
-    l.razao_social = None
     l.linha_origem = linha_origem
-    l.confianca_conferencia = None
-    l.criado_em = None
-    l.atualizado_em = None
-    l.atualizado_por_usuario_id = None
     return l
 
 
@@ -146,18 +111,15 @@ def _db_com_fechamentos(fechamentos, lancamentos=None, empresa=None):
     db = MagicMock()
     empresa_obj = empresa or _make_empresa()
 
-    # Mock da query de fechamentos
     q_fech = MagicMock()
     q_fech.filter.return_value = q_fech
     q_fech.order_by.return_value = q_fech
     q_fech.all.return_value = fechamentos
 
-    # Mock da query de empresa
     q_emp = MagicMock()
     q_emp.filter.return_value = q_emp
     q_emp.first.return_value = empresa_obj
 
-    # Mock da query de lancamentos
     q_lanc = MagicMock()
     q_lanc.filter.return_value = q_lanc
     q_lanc.order_by.return_value = q_lanc
@@ -203,25 +165,19 @@ def test_erro_sem_conciliacoes_no_mes():
 # ── Teste 3: não inclui empresa errada ────────────────────────────────────────
 
 def test_isolamento_por_empresa():
-    """O service deve filtrar por empresa_id; outros dados não devem vazar."""
     fech_a = _make_fechamento(fid=FECH_1, empresa_id=EMPRESA_A)
-    # Simula db que retorna apenas fechamentos da empresa A (comportamento correto)
     db = _db_com_fechamentos(fechamentos=[fech_a], lancamentos=[])
     conteudo, nome = gerar_excel_mensal(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
-    # Garante que o resultado foi gerado e tem bytes válidos
     assert len(conteudo) > 0
     assert "empresa_teste" in nome or "2026_06" in nome
-
-    # Verifica que db.query foi chamado ao menos uma vez
-    assert db.query.called, "db.query deve ter sido chamado"
+    assert db.query.called
 
 
 # ── Teste 4: filtra por tipo de conciliação ───────────────────────────────────
 
 def test_filtra_por_tipo_conciliacao():
-    """Apenas conciliações do tipo informado devem ser incluídas."""
     fech = _make_fechamento(fid=FECH_1, tipo="extrato_anotado", status="aprovado")
     db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[])
     conteudo, nome = gerar_excel_mensal(
@@ -234,9 +190,9 @@ def test_filtra_por_tipo_conciliacao():
 # ── Teste 5: inclui múltiplos dias do mesmo mês ───────────────────────────────
 
 def test_multiplos_dias_mesmo_mes():
-    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 1), titulo="01/06")
-    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 6, 2), titulo="02/06")
-    fech3 = _make_fechamento(fid=FECH_3, periodo_inicio=date(2026, 6, 9), titulo="09/06")
+    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 1))
+    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 6, 2))
+    fech3 = _make_fechamento(fid=FECH_3, periodo_inicio=date(2026, 6, 9))
 
     l1 = _make_lancamento(fechamento_id=FECH_1, data=date(2026, 6, 1))
     l2 = _make_lancamento(fechamento_id=FECH_2, data=date(2026, 6, 2))
@@ -249,17 +205,15 @@ def test_multiplos_dias_mesmo_mes():
     assert len(conteudo) > 0
 
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
-    ws_dias = wb["Dias Incluídos"]
-    # 3 fechamentos devem estar listados
-    assert ws_dias.max_row >= 4  # 1 cabeçalho + 3 dias
+    ws = wb.active
+    # 7 linhas de cabeçalho + 1 cabeçalho de tabela + 3 lançamentos = 11 linhas
+    assert ws.max_row >= _LINHA_CABECALHO_TABELA + 3
 
 
 # ── Teste 6: não inclui datas fora do mês ────────────────────────────────────
 
 def test_exclui_datas_fora_do_mes():
-    """buscar_fechamentos_do_mes deve filtrar pelo mês/ano correto via SQL."""
     fech_junho = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 15))
-    # O mock retorna apenas o de junho — simula o comportamento correto do filtro SQL
     db = _db_com_fechamentos(fechamentos=[fech_junho], lancamentos=[])
     fechamentos = buscar_fechamentos_do_mes(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
@@ -268,9 +222,9 @@ def test_exclui_datas_fora_do_mes():
     assert fechamentos[0].periodo_inicio.month == 6
 
 
-# ── Teste 7: gera workbook válido ────────────────────────────────────────────
+# ── Teste 7: gera workbook com UMA única aba ─────────────────────────────────
 
-def test_gera_workbook_valido():
+def test_gera_workbook_com_uma_aba():
     fech = _make_fechamento()
     l = _make_lancamento()
     db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
@@ -280,11 +234,34 @@ def test_gera_workbook_valido():
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
     assert wb is not None
     assert nome.endswith(".xlsx")
+    assert len(wb.sheetnames) == 1, f"Esperado 1 aba, mas encontrou: {wb.sheetnames}"
 
 
-# ── Teste 8: workbook contém abas esperadas ───────────────────────────────────
+# ── Teste 8: aba tem nome no formato mês+ano ─────────────────────────────────
 
-def test_workbook_contem_abas_esperadas():
+def test_aba_tem_nome_mes_ano():
+    fech = _make_fechamento(periodo_inicio=date(2026, 6, 1))
+    l = _make_lancamento(data=date(2026, 6, 1))
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    assert wb.sheetnames[0] == "Jun26", f"Nome da aba esperado 'Jun26', recebeu '{wb.sheetnames[0]}'"
+
+
+def test_nome_aba_diferentes_meses():
+    """Valida a função auxiliar de nomeação da aba para todos os meses."""
+    assert _nome_aba(1, 2026) == "Jan26"
+    assert _nome_aba(6, 2026) == "Jun26"
+    assert _nome_aba(12, 2025) == "Dez25"
+    assert _nome_aba(3, 2027) == "Mar27"
+
+
+# ── Teste 9: NÃO contém abas antigas ─────────────────────────────────────────
+
+def test_nao_contem_abas_antigas():
+    """A exportação mensal não deve mais gerar abas do formato antigo."""
     fech = _make_fechamento()
     l = _make_lancamento()
     db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
@@ -293,81 +270,78 @@ def test_workbook_contem_abas_esperadas():
     )
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
     abas = wb.sheetnames
-    assert "Resumo Mensal" in abas
-    assert "Conciliação Mensal" in abas
-    assert "Dias Incluídos" in abas
-    assert "Pendências" in abas
+    assert "Resumo Mensal" not in abas, "Aba 'Resumo Mensal' não deve existir"
+    assert "Conciliação Mensal" not in abas, "Aba 'Conciliação Mensal' não deve existir"
+    assert "Dias Incluídos" not in abas, "Aba 'Dias Incluídos' não deve existir"
+    assert "Pendências" not in abas, "Aba 'Pendências' não deve existir"
 
 
-# ── Teste 9: aba Conciliação Mensal contém lançamentos de mais de um dia ─────
+# ── Teste 10: cabeçalho da tabela na linha 8 com colunas corretas ────────────
 
-def test_conciliacao_mensal_contem_lancamentos_multiplos_dias():
-    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 1), titulo="01/06")
-    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 6, 2), titulo="02/06")
-
-    l1a = _make_lancamento(fechamento_id=FECH_1, data=date(2026, 6, 1), descricao_banco="Lanc A", linha_origem=1)
-    l1b = _make_lancamento(fechamento_id=FECH_1, data=date(2026, 6, 1), descricao_banco="Lanc B", linha_origem=2)
-    l2a = _make_lancamento(fechamento_id=FECH_2, data=date(2026, 6, 2), descricao_banco="Lanc C", linha_origem=1)
-
-    db = _db_com_fechamentos(
-        fechamentos=[fech1, fech2],
-        lancamentos=[l1a, l1b, l2a],
-    )
+def test_cabecalho_tabela_na_linha_8():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
     conteudo, _ = gerar_excel_mensal(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
-    ws_conc = wb["Conciliação Mensal"]
-    # 1 cabeçalho + 3 lançamentos
-    assert ws_conc.max_row >= 4
+    ws = wb.active
+    cabecalhos = [ws.cell(row=_LINHA_CABECALHO_TABELA, column=c).value for c in range(1, len(_COLUNAS_MENSAL) + 1)]
+    assert cabecalhos == _COLUNAS_MENSAL, f"Cabeçalhos incorretos: {cabecalhos}"
 
 
-# ── Teste 10: aba Dias Incluídos lista fechamentos ────────────────────────────
+# ── Teste 11: lançamentos aparecem a partir da linha 9 ───────────────────────
 
-def test_dias_incluidos_lista_fechamentos():
-    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 1), titulo="01/06")
-    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 6, 5), titulo="05/06")
-
-    l1 = _make_lancamento(fechamento_id=FECH_1, data=date(2026, 6, 1))
-    l2 = _make_lancamento(fechamento_id=FECH_2, data=date(2026, 6, 5))
-
-    db = _db_com_fechamentos(fechamentos=[fech1, fech2], lancamentos=[l1, l2])
+def test_lancamentos_a_partir_da_linha_9():
+    fech = _make_fechamento()
+    l = _make_lancamento(descricao_banco="TED recebida teste")
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
     conteudo, _ = gerar_excel_mensal(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
-    ws_dias = wb["Dias Incluídos"]
-    titulos_coluna = [ws_dias.cell(row=r, column=3).value for r in range(2, ws_dias.max_row + 1)]
-    assert "01/06" in titulos_coluna
-    assert "05/06" in titulos_coluna
+    ws = wb.active
+    primeira_linha_dados = _LINHA_CABECALHO_TABELA + 1
+    descricao = ws.cell(row=primeira_linha_dados, column=2).value
+    assert descricao == "TED recebida teste", f"Descrição esperada na linha {primeira_linha_dados}, recebeu: {descricao}"
 
 
-# ── Teste 11: dados de extrato_anotado — lançamentos com conferência de fluxo ─
+# ── Teste 12: nome do arquivo segue padrão ia16_conciliacao_mensal_* ─────────
 
-def test_extrato_anotado_com_conferencia_fluxo():
-    fech = _make_fechamento(tipo="extrato_anotado", status="aprovado")
-    l_enc = _make_lancamento(
-        tipo_conferencia_fluxo="encontrado",
-        status_revisao="revisado",
-        descricao_banco="TED pagamento",
+def test_nome_arquivo_padrao():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    _, nome = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
-    l_nao_enc = _make_lancamento(
-        tipo_conferencia_fluxo="nao_encontrado",
-        status_revisao="pendente",
-        descricao_banco="Débito desconhecido",
-        tipo_movimento="saida",
-    )
-    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l_enc, l_nao_enc])
+    assert nome.startswith("ia16_conciliacao_mensal_"), f"Nome não segue padrão: {nome}"
+    assert "2026_06" in nome
+    assert nome.endswith(".xlsx")
+
+
+# ── Teste 13: entrada e saída separados corretamente ─────────────────────────
+
+def test_entrada_saida_separados():
+    fech = _make_fechamento()
+    l_entrada = _make_lancamento(tipo_movimento="entrada", valor=Decimal("1000.00"), saldo=None)
+    l_saida = _make_lancamento(tipo_movimento="saida", valor=Decimal("300.00"), saldo=None)
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l_entrada, l_saida])
     conteudo, _ = gerar_excel_mensal(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
 
-    # Aba Conciliação Mensal deve ter coluna STATUS NO FLUXO
-    ws_conc = wb["Conciliação Mensal"]
-    cabecalhos = [ws_conc.cell(row=1, column=c).value for c in range(1, ws_conc.max_column + 1)]
-    assert "STATUS NO FLUXO" in cabecalhos
+    col_entrada = _COLUNAS_MENSAL.index("ENTRADA EXTRATO") + 1  # 1-based
+    col_saida = _COLUNAS_MENSAL.index("SAIDA EXTRATO") + 1
 
-    # Aba Pendências deve incluir o lançamento não encontrado
-    ws_pend = wb["Pendências"]
-    assert ws_pend.max_row >= 2  # pelo menos 1 pendente + cabeçalho
+    linha_entrada = _LINHA_CABECALHO_TABELA + 1
+    linha_saida = _LINHA_CABECALHO_TABELA + 2
+
+    assert ws.cell(row=linha_entrada, column=col_entrada).value == 1000.0
+    assert ws.cell(row=linha_entrada, column=col_saida).value in (None, "")
+
+    assert ws.cell(row=linha_saida, column=col_saida).value == 300.0
+    assert ws.cell(row=linha_saida, column=col_entrada).value in (None, "")

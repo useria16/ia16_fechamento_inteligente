@@ -345,11 +345,11 @@ Cada contrato deve seguir este formato:
 /api/v1/logs-processamento
 ```
 
-## 16. Contrato — Exportação Consolidada Mensal
+## 16. Contrato — Exportação Mensal de Conciliação
 
 ### `GET /api/v1/conciliacoes/exportar-mensal`
 
-Gera e retorna uma planilha Excel consolidando todas as conciliações de uma empresa, tipo e mês.
+Gera e retorna uma planilha Excel com todos os lançamentos conciliados de uma empresa, tipo e mês, acumulados em uma única aba no layout da planilha mensal padrão.
 
 **Importante:** esta rota estática deve estar registrada antes de `/{conciliacao_id}` no router para não ser capturada pela rota dinâmica (FastAPI/Starlette resolve por ordem de registro).
 
@@ -357,8 +357,8 @@ Gera e retorna uma planilha Excel consolidando todas as conciliações de uma em
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |---|---|---|---|
-| `ano` | inteiro | sim | Ano do consolidado. Entre 2000 e 2100. |
-| `mes` | inteiro | sim | Mês do consolidado. Entre 1 e 12. |
+| `ano` | inteiro | sim | Ano do período. Entre 2000 e 2100. |
+| `mes` | inteiro | sim | Mês do período. Entre 1 e 12. |
 | `tipo_conciliacao` | string | sim | Tipo de conciliação (ex: `extrato_anotado`, `bancaria`). |
 | `empresa_id` | string (UUID) | condicional | Obrigatório para `admin_ia16`. Ignorado para usuários comuns (usa empresa do perfil). |
 | `status_incluidos` | string | não | Status separados por vírgula. Padrão: `processado,com_divergencias,aprovado,reaberto`. |
@@ -376,19 +376,43 @@ Gera e retorna uma planilha Excel consolidando todas as conciliações de uma em
 - O período é determinado pelo campo `periodo_inicio` do fechamento.
 - Conciliações com `periodo_inicio` no mês/ano informado são incluídas.
 - Conciliações fora do mês não são incluídas.
+- Os lançamentos de todos os dias do mês são acumulados em ordem por data.
 
 #### Resposta de sucesso — `200 OK`
 
 ```
 Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-Content-Disposition: attachment; filename="ia16_consolidado_<empresa>_<tipo>_<ano>_<mes>.xlsx"
+Content-Disposition: attachment; filename="ia16_conciliacao_mensal_<empresa>_<tipo>_<ano>_<mes>.xlsx"
 ```
 
-Corpo: binário do arquivo Excel com 4 abas:
-- **Resumo Mensal** — totais agregados do período
-- **Conciliação Mensal** — todos os lançamentos do mês
-- **Dias Incluídos** — lista de fechamentos com totais por dia
-- **Pendências** — lançamentos com status pendente ou divergente
+Corpo: binário do arquivo Excel com **uma única aba** no layout da planilha conciliada mensal:
+
+| Linha | Conteúdo |
+|---|---|
+| 1 | `Atualização:` / data e hora da geração |
+| 2 | `Nome:` / nome da empresa |
+| 3 | `Agência:` / agência (em branco até o modelo suportar) |
+| 4 | `Conta:` / conta (em branco até o modelo suportar) |
+| 5 | (vazia) |
+| 6 | `Periodo:  <Mês>/<Ano>` |
+| 7 | (vazia) |
+| 8 | Cabeçalho da tabela |
+| 9+ | Lançamentos acumulados do mês |
+
+Colunas da tabela (linha 8):
+
+| Coluna | Campo |
+|---|---|
+| DATA | Data do lançamento |
+| DESCRIÇÃO LANÇAMENTO BANCO | Descrição do extrato bancário |
+| DESCRIÇÃO FORNECEDOR/CLIENTE | Razão social / descrição de negócio |
+| NF / DOC | Número de nota fiscal ou documento |
+| VALOR NF/DOC | Valor da nota fiscal ou documento |
+| ENTRADA EXTRATO | Valor quando tipo_movimento = entrada |
+| SAIDA EXTRATO | Valor quando tipo_movimento = saida |
+| SALDO | Saldo do lançamento (quando disponível) |
+
+Nome da aba: abreviação PT-BR do mês + 2 últimos dígitos do ano (ex: `Jun26`, `Dez25`).
 
 #### Erros
 
