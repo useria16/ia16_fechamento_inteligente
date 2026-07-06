@@ -399,9 +399,14 @@ Corpo: binário do arquivo Excel com **uma única aba** no layout da planilha co
 | 6 | `Periodo:  <Mês>/<Ano>` |
 | 7 | (vazia) |
 | 8 | Cabeçalho da tabela |
-| 9+ | Lançamentos acumulados do mês |
+| 9 | `SALDO TOTAL DISPONÍVEL DIA` — saldo antes do primeiro lançamento do mês |
+| 10+ | Lançamentos acumulados do mês em ordem cronológica |
+| última | `SALDO TOTAL DISPONÍVEL DIA` — saldo final (fórmula acumulada) |
 
-**Metadados:** o service busca o primeiro `ArquivoEnviado` com `tipo_arquivo = "extrato_bancario"` vinculado aos fechamentos do mês. Se nenhum arquivo tiver metadados preenchidos, os campos `Agência` e `Conta` ficam em branco, e `Nome` usa o nome da empresa.
+**Metadados:** o service busca todos os `ArquivoEnviado` com `tipo_arquivo = "extrato_bancario"` vinculados aos fechamentos do mês, em ordem cronológica, e seleciona o mais completo seguindo esta prioridade:
+1. Primeiro arquivo que tiver `agencia` **e** `conta` preenchidos — usado imediatamente.
+2. Se nenhum tiver ambos, usa o primeiro que tiver pelo menos `agencia` **ou** `conta`.
+3. Se nenhum arquivo tiver metadados úteis, aplica fallback: `Nome` = nome da empresa, `Agência` e `Conta` = vazios, `Atualização` = data/hora atual.
 
 Colunas da tabela (linha 8):
 

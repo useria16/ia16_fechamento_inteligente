@@ -2,21 +2,33 @@
 Testes do service de exportação mensal de conciliação (exportacao_mensal_service).
 
 Cobre:
-  1. Exportação diária existente continua funcionando (smoke test do import).
-  2. Erro quando não há conciliações no mês.
-  3. Inclui apenas conciliações da empresa correta (isolamento multicliente).
-  4. Filtra por tipo de conciliação.
-  5. Inclui múltiplos dias do mesmo mês.
-  6. Exclui conciliações fora do mês.
-  7. Gera workbook com uma única aba.
-  8. Aba tem nome no formato mês+ano (ex: Jun26).
-  9. Aba NÃO contém abas antigas (Resumo Mensal, Conciliação Mensal, etc.).
- 10. Cabeçalho da tabela está na linha 8 com as colunas corretas.
- 11. Lançamentos aparecem a partir da linha 9.
- 12. Nome do arquivo segue o padrão Conciliacao_<Empresa>_<Mes>_<Ano>.xlsx.
- 13. Dados de entrada e saída separados corretamente.
- 14. Cabeçalho usa metadados do arquivo de extrato quando disponíveis.
- 15. Fallback seguro quando não há metadados.
+  1.  Exportação diária existente continua funcionando (smoke test do import).
+  2.  Erro quando não há conciliações no mês.
+  3.  Inclui apenas conciliações da empresa correta (isolamento multicliente).
+  4.  Filtra por tipo de conciliação.
+  5.  Inclui múltiplos dias do mesmo mês.
+  6.  Exclui conciliações fora do mês.
+  7.  Gera workbook com uma única aba.
+  8.  Aba tem nome no formato mês+ano (ex: Jun26).
+  9.  Aba NÃO contém abas antigas (Resumo Mensal, Conciliação Mensal, etc.).
+ 10.  Cabeçalho da tabela está na linha 8 com as colunas corretas.
+ 11.  Saldo inicial na linha 9; lançamentos a partir da linha 10.
+ 12.  Nome do arquivo segue o padrão Conciliacao_<Empresa>_<Mes>_<Ano>.xlsx.
+ 13.  Dados de entrada e saída separados corretamente (colunas F e G).
+ 14.  Cabeçalho usa metadados do arquivo de extrato quando disponíveis.
+ 15.  Fallback seguro quando não há metadados.
+ 16.  Arquivo com metadados={} usa fallback (não quebra).
+ 17.  Busca de metadados usa query única com .in_() — não loop por fechamento.
+ 18.  Metadados preferem arquivo com agência E conta quando há dois arquivos.
+ 19.  Filtro automático está em A8:H8.
+ 20.  Linha 6 tem fill BDD7EE (azul claro — período).
+ 21.  Linha 8 tem fill 1F4E79 (azul escuro — cabeçalho).
+ 22.  Linha 9 coluna B contém "SALDO TOTAL DISPONÍVEL DIA" (saldo inicial).
+ 23.  Última linha coluna B contém "SALDO TOTAL DISPONÍVEL DIA" (saldo final).
+ 24.  Coluna A nas linhas de dados tem formato "DD/MM/YYYY".
+ 25.  Colunas F, G, H nas linhas de dados têm formato "#,##0.00".
+ 26.  Entrada (coluna F) tem fonte verde (00B050).
+ 27.  Saída (coluna G) tem fonte vermelha (FF0000).
 """
 import io
 import uuid
@@ -116,8 +128,12 @@ def _make_arquivo(fechamento_id=FECH_1, metadados=None):
     return a
 
 
-def _db_com_fechamentos(fechamentos, lancamentos=None, empresa=None, arquivo_extrato=None):
-    """Cria um mock de db que retorna os dados fornecidos."""
+def _db_com_fechamentos(fechamentos, lancamentos=None, empresa=None, arquivos_extrato=None):
+    """Cria um mock de db que retorna os dados fornecidos.
+
+    arquivos_extrato deve ser uma lista de arquivos (ou None/[] para sem arquivo).
+    O service usa .all() para buscar metadados, então o mock configura .all.return_value.
+    """
     db = MagicMock()
     empresa_obj = empresa or _make_empresa()
 
@@ -137,7 +153,8 @@ def _db_com_fechamentos(fechamentos, lancamentos=None, empresa=None, arquivo_ext
 
     q_arq = MagicMock()
     q_arq.filter.return_value = q_arq
-    q_arq.first.return_value = arquivo_extrato  # None = sem arquivo
+    q_arq.order_by.return_value = q_arq
+    q_arq.all.return_value = arquivos_extrato or []  # service usa .all() com .in_()
 
     def side_effect_query(model):
         from app.models.fechamento_financeiro import FechamentoFinanceiro
@@ -308,9 +325,10 @@ def test_cabecalho_tabela_na_linha_8():
     assert cabecalhos == _COLUNAS_MENSAL, f"Cabeçalhos incorretos: {cabecalhos}"
 
 
-# ── Teste 11: lançamentos aparecem a partir da linha 9 ───────────────────────
+# ── Teste 11: saldo inicial na linha 9; lançamentos a partir da linha 10 ──────
 
-def test_lancamentos_a_partir_da_linha_9():
+def test_lancamentos_a_partir_da_linha_10():
+    """Linha 9 é o saldo inicial. Dados começam na linha 10 (cabeçalho+2)."""
     fech = _make_fechamento()
     l = _make_lancamento(descricao_banco="TED recebida teste")
     db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
@@ -319,7 +337,12 @@ def test_lancamentos_a_partir_da_linha_9():
     )
     wb = openpyxl.load_workbook(io.BytesIO(conteudo))
     ws = wb.active
-    primeira_linha_dados = _LINHA_CABECALHO_TABELA + 1
+
+    # Linha 9 = saldo inicial
+    assert ws.cell(row=_LINHA_CABECALHO_TABELA + 1, column=2).value == "SALDO TOTAL DISPONÍVEL DIA"
+
+    # Linha 10 = primeiro lançamento
+    primeira_linha_dados = _LINHA_CABECALHO_TABELA + 2
     descricao = ws.cell(row=primeira_linha_dados, column=2).value
     assert descricao == "TED recebida teste", f"Descrição na linha {primeira_linha_dados}: {descricao}"
 
@@ -367,8 +390,9 @@ def test_entrada_saida_separados():
     col_entrada = _COLUNAS_MENSAL.index("ENTRADA EXTRATO") + 1
     col_saida = _COLUNAS_MENSAL.index("SAIDA EXTRATO") + 1
 
-    linha_entrada = _LINHA_CABECALHO_TABELA + 1
-    linha_saida = _LINHA_CABECALHO_TABELA + 2
+    # Linha 9 = saldo inicial, dados a partir da linha 10
+    linha_entrada = _LINHA_CABECALHO_TABELA + 2
+    linha_saida = _LINHA_CABECALHO_TABELA + 3
 
     assert ws.cell(row=linha_entrada, column=col_entrada).value == 1000.0
     assert ws.cell(row=linha_entrada, column=col_saida).value in (None, "")
@@ -392,7 +416,7 @@ def test_cabecalho_usa_metadados_do_extrato():
             "conta": "9876543-2",
         },
     )
-    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l], arquivo_extrato=arquivo)
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l], arquivos_extrato=[arquivo])
     conteudo, _ = gerar_excel_mensal(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
     )
@@ -412,9 +436,9 @@ def test_cabecalho_fallback_sem_metadados():
     fech = _make_fechamento()
     l = _make_lancamento()
     empresa = _make_empresa(nome="Empresa Sem Extrato")
-    # arquivo_extrato=None → sem arquivo
+    # arquivos_extrato=None → sem arquivo (retorna lista vazia)
     db = _db_com_fechamentos(
-        fechamentos=[fech], lancamentos=[l], empresa=empresa, arquivo_extrato=None
+        fechamentos=[fech], lancamentos=[l], empresa=empresa, arquivos_extrato=None
     )
     conteudo, _ = gerar_excel_mensal(
         db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
@@ -430,3 +454,256 @@ def test_cabecalho_fallback_sem_metadados():
     # Atualização deve ser uma string não vazia (data/hora atual)
     atualizacao = ws.cell(row=1, column=2).value
     assert atualizacao and len(str(atualizacao)) > 5, "Atualização deve ter valor de fallback"
+
+
+# ── Teste 16: arquivo com metadados={} usa fallback sem erros ─────────────────
+
+def test_cabecalho_fallback_metadados_vazios():
+    """
+    Arquivo de extrato existe mas tem metadados={} (ainda não processado).
+    Deve usar fallback sem quebrar. Reproduz o bug onde a condição
+    `if arquivo and arquivo.metadados:` pulava arquivos com dict vazio.
+    """
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    empresa = _make_empresa(nome="Empresa Com Arquivo Vazio")
+    arquivo = _make_arquivo(fechamento_id=FECH_1, metadados={})
+    db = _db_com_fechamentos(
+        fechamentos=[fech], lancamentos=[l], empresa=empresa, arquivos_extrato=[arquivo]
+    )
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+
+    # Com metadados={}, fallback deve usar nome da empresa
+    assert ws.cell(row=2, column=2).value == "Empresa Com Arquivo Vazio"
+    # Agência e conta em branco
+    assert ws.cell(row=3, column=2).value in (None, "")
+    assert ws.cell(row=4, column=2).value in (None, "")
+
+
+# ── Teste 17: busca de metadados usa query única com .in_() ───────────────────
+
+def test_metadados_usa_query_unica_com_in():
+    """
+    _buscar_metadados_extrato deve fazer UMA query com .in_() para todos
+    os fechamentos do mês — não um loop de N queries individuais.
+
+    Verifica que db.query(ArquivoEnviado) é chamado exatamente uma vez
+    durante a geração, independente do número de fechamentos.
+    """
+    from app.models.arquivo_enviado import ArquivoEnviado
+
+    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 1))
+    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 6, 15))
+    l = _make_lancamento()
+    arquivo = _make_arquivo(metadados={"agencia": "0001", "conta": "12345-6", "nome": "BANCO X", "atualizacao": "01/06/2026 08:00:00"})
+
+    db = _db_com_fechamentos(
+        fechamentos=[fech1, fech2], lancamentos=[l], arquivos_extrato=[arquivo]
+    )
+
+    gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+
+    # Contabiliza chamadas a db.query com ArquivoEnviado
+    calls_arq = [c for c in db.query.call_args_list if c.args and c.args[0] is ArquivoEnviado]
+    assert len(calls_arq) == 1, (
+        f"Esperado 1 query para ArquivoEnviado (via .in_()), mas foram feitas {len(calls_arq)}. "
+        f"O service não deve fazer N queries em loop por fechamento."
+    )
+
+
+# ── Teste 18: prefere arquivo com agencia E conta ─────────────────────────────
+
+def test_metadados_prefere_arquivo_com_agencia_e_conta():
+    """
+    Quando há dois arquivos de extrato, o service deve preferir o que tem
+    agencia E conta. O primeiro (sem metadados) não deve ser usado.
+    Reproduz o critério: 'se o diário mostra 0285/0017861-2, o mensal também deve.'
+    """
+    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 1))
+    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 6, 15))
+    l = _make_lancamento()
+    empresa = _make_empresa(nome="Empresa XYZ")
+
+    arquivo_sem_meta  = _make_arquivo(fechamento_id=FECH_1, metadados={})
+    arquivo_com_meta  = _make_arquivo(
+        fechamento_id=FECH_2,
+        metadados={
+            "agencia": "0285",
+            "conta": "0017861-2",
+            "nome": "BANCO PILOTO S/A",
+            "atualizacao": "09/06/2026 10:00:00",
+        },
+    )
+
+    db = _db_com_fechamentos(
+        fechamentos=[fech1, fech2],
+        lancamentos=[l],
+        empresa=empresa,
+        arquivos_extrato=[arquivo_sem_meta, arquivo_com_meta],
+    )
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+
+    assert ws.cell(row=3, column=2).value == "0285",       "Agência incorreta"
+    assert ws.cell(row=4, column=2).value == "0017861-2",  "Conta incorreta"
+    assert ws.cell(row=2, column=2).value == "BANCO PILOTO S/A", "Nome do banco incorreto"
+
+
+# ── Teste 19: filtro automático em A8:H8 ──────────────────────────────────────
+
+def test_auto_filter_em_a8_h8():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    assert ws.auto_filter.ref == "A8:H8", f"auto_filter.ref incorreto: {ws.auto_filter.ref}"
+
+
+# ── Teste 20: linha 6 tem fill azul-claro (BDD7EE — período) ─────────────────
+
+def test_linha_6_fill_periodo():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    fill = ws.cell(row=6, column=1).fill
+    assert fill is not None, "Linha 6 deve ter fill"
+    fgColor = fill.fgColor.rgb if fill.fgColor else ""
+    assert "BDD7EE" in fgColor, f"Linha 6 deve ter fill BDD7EE (período), mas foi: {fgColor}"
+
+
+# ── Teste 21: linha 8 tem fill azul-escuro (1F4E79 — cabeçalho) ──────────────
+
+def test_linha_8_fill_cabecalho():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    fill = ws.cell(row=8, column=1).fill
+    assert fill is not None, "Linha 8 deve ter fill"
+    fgColor = fill.fgColor.rgb if fill.fgColor else ""
+    assert "1F4E79" in fgColor, f"Linha 8 deve ter fill 1F4E79 (cabeçalho), mas foi: {fgColor}"
+
+
+# ── Teste 22: linha 9 coluna B = "SALDO TOTAL DISPONÍVEL DIA" (saldo inicial) ─
+
+def test_linha_9_saldo_inicial():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    val = ws.cell(row=9, column=2).value
+    assert val == "SALDO TOTAL DISPONÍVEL DIA", f"Linha 9 col B esperado saldo inicial, mas: {val!r}"
+
+
+# ── Teste 23: última linha coluna B = "SALDO TOTAL DISPONÍVEL DIA" (saldo final)
+
+def test_ultima_linha_saldo_final():
+    fech = _make_fechamento()
+    l = _make_lancamento()
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    # Com 1 lançamento: saldo ini (9), dado (10), saldo fim (11)
+    ultima = ws.max_row
+    val = ws.cell(row=ultima, column=2).value
+    assert val == "SALDO TOTAL DISPONÍVEL DIA", (
+        f"Última linha (row {ultima}) col B esperado saldo final, mas: {val!r}"
+    )
+
+
+# ── Teste 24: coluna A nas linhas de dados tem formato DD/MM/YYYY ─────────────
+
+def test_coluna_a_formato_data():
+    fech = _make_fechamento()
+    l = _make_lancamento(data=date(2026, 6, 5))
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    # Linha 10 = primeira linha de dados
+    fmt = ws.cell(row=10, column=1).number_format
+    assert fmt == "DD/MM/YYYY", f"Formato de data na col A esperado DD/MM/YYYY, mas: {fmt!r}"
+
+
+# ── Teste 25: colunas F, G, H têm formato #,##0.00 ───────────────────────────
+
+def test_colunas_fgh_formato_numero():
+    fech = _make_fechamento()
+    l = _make_lancamento(tipo_movimento="entrada", valor=Decimal("1000.00"))
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    row = 10  # primeira linha de dados
+    for col, nome in [(6, "F"), (7, "G"), (8, "H")]:
+        fmt = ws.cell(row=row, column=col).number_format
+        assert fmt == "#,##0.00", f"Col {nome} formato esperado #,##0.00, mas: {fmt!r}"
+
+
+# ── Teste 26: entrada (coluna F) tem fonte verde (00B050) ─────────────────────
+
+def test_entrada_font_verde():
+    fech = _make_fechamento()
+    l = _make_lancamento(tipo_movimento="entrada", valor=Decimal("500.00"))
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    row = 10  # primeira linha de dados
+    font = ws.cell(row=row, column=6).font
+    assert font is not None, "Coluna F deve ter font definida"
+    cor = font.color.rgb if font.color else ""
+    assert "00B050" in cor, f"Entrada (col F) deve ter font verde 00B050, mas: {cor!r}"
+
+
+# ── Teste 27: saída (coluna G) tem fonte vermelha (FF0000) ───────────────────
+
+def test_saida_font_vermelha():
+    fech = _make_fechamento()
+    l = _make_lancamento(tipo_movimento="saida", valor=Decimal("200.00"))
+    db = _db_com_fechamentos(fechamentos=[fech], lancamentos=[l])
+    conteudo, _ = gerar_excel_mensal(
+        db=db, empresa_id=EMPRESA_A, ano=2026, mes=6, tipo_conciliacao="extrato_anotado"
+    )
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+    row = 10  # primeira linha de dados
+    font = ws.cell(row=row, column=7).font
+    assert font is not None, "Coluna G deve ter font definida"
+    cor = font.color.rgb if font.color else ""
+    assert "FF0000" in cor, f"Saída (col G) deve ter font vermelha FF0000, mas: {cor!r}"
