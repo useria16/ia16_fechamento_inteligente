@@ -39,6 +39,12 @@ service_role_key.txt
 .claude/settings.local.json
 .claude/memory/
 
+# Codex - configurações locais
+.codex/
+
+# MCP - contém tokens sensíveis
+.mcp.json
+
 # IDE
 .idea/
 .vscode/
