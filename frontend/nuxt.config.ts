@@ -14,7 +14,8 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
-    '/api/**': { proxy: 'http://127.0.0.1:8000/api/**' },
+    // NUXT_INTERNAL_API_URL = http://backend:8000 em Docker, http://127.0.0.1:8000 em dev local
+    '/api/**': { proxy: `${process.env.NUXT_INTERNAL_API_URL ?? 'http://127.0.0.1:8000'}/api/**` },
   },
 
   typescript: {

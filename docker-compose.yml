@@ -16,6 +16,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - ./frontend/.env
+    environment:
+      - NUXT_INTERNAL_API_URL=http://backend:8000
     expose:
       - "3000"
     restart: unless-stopped
