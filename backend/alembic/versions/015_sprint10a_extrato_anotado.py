@@ -83,20 +83,32 @@ def upgrade() -> None:
         CREATE POLICY "lancamentos_extrato_anotado_select" ON {SCHEMA}.lancamentos_extrato_anotado
         FOR SELECT TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         );
     """)
     op.execute(f"""
         CREATE POLICY "lancamentos_extrato_anotado_update" ON {SCHEMA}.lancamentos_extrato_anotado
         FOR UPDATE TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
         WITH CHECK (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         );
     """)
 

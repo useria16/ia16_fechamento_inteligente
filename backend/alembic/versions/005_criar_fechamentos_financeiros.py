@@ -64,24 +64,36 @@ def upgrade() -> None:
         CREATE POLICY "fechamentos_select" ON {SCHEMA}.fechamentos_financeiros
         FOR SELECT TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
     op.execute(f"""
         CREATE POLICY "fechamentos_insert" ON {SCHEMA}.fechamentos_financeiros
         FOR INSERT TO authenticated
         WITH CHECK (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
     op.execute(f"""
         CREATE POLICY "fechamentos_update" ON {SCHEMA}.fechamentos_financeiros
         FOR UPDATE TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
 

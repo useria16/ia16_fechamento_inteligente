@@ -54,16 +54,24 @@ def upgrade() -> None:
         CREATE POLICY "logs_select" ON {SCHEMA}.logs_processamento
         FOR SELECT TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
     op.execute(f"""
         CREATE POLICY "logs_insert" ON {SCHEMA}.logs_processamento
         FOR INSERT TO authenticated
         WITH CHECK (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
 

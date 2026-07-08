@@ -84,24 +84,36 @@ def upgrade() -> None:
         CREATE POLICY "itens_conciliacao_select" ON {SCHEMA}.itens_conciliacao
         FOR SELECT TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
     op.execute(f"""
         CREATE POLICY "itens_conciliacao_insert" ON {SCHEMA}.itens_conciliacao
         FOR INSERT TO authenticated
         WITH CHECK (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
     op.execute(f"""
         CREATE POLICY "itens_conciliacao_delete" ON {SCHEMA}.itens_conciliacao
         FOR DELETE TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
 
@@ -152,24 +164,36 @@ def upgrade() -> None:
         CREATE POLICY "divergencias_conciliacao_select" ON {SCHEMA}.divergencias_conciliacao
         FOR SELECT TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
     op.execute(f"""
         CREATE POLICY "divergencias_conciliacao_insert" ON {SCHEMA}.divergencias_conciliacao
         FOR INSERT TO authenticated
         WITH CHECK (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
     op.execute(f"""
         CREATE POLICY "divergencias_conciliacao_delete" ON {SCHEMA}.divergencias_conciliacao
         FOR DELETE TO authenticated
         USING (
-            ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-            OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+            EXISTS (
+                SELECT 1 FROM {SCHEMA}.usuarios u
+                WHERE u.usuario_auth_id = auth.uid()
+                  AND u.ativo = true
+                  AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+            )
         )
     """)
 

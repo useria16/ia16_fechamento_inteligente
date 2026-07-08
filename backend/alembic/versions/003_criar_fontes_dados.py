@@ -79,23 +79,36 @@ def upgrade() -> None:
         CREATE POLICY "fontes_dados_select" ON {SCHEMA}.fontes_dados
         FOR SELECT TO authenticated
         USING (
-          ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-          OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+          EXISTS (
+            SELECT 1 FROM {SCHEMA}.usuarios u
+            WHERE u.usuario_auth_id = auth.uid()
+              AND u.ativo = true
+              AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+          )
         )
     """)
     op.execute(f"""
         CREATE POLICY "fontes_dados_insert" ON {SCHEMA}.fontes_dados
         FOR INSERT TO authenticated
         WITH CHECK (
-          ({SCHEMA}.usuario_atual()).perfil IN ('admin_ia16', 'cliente_admin')
+          EXISTS (
+            SELECT 1 FROM {SCHEMA}.usuarios u
+            WHERE u.usuario_auth_id = auth.uid()
+              AND u.ativo = true
+              AND u.perfil IN ('admin_ia16', 'cliente_admin')
+          )
         )
     """)
     op.execute(f"""
         CREATE POLICY "fontes_dados_update" ON {SCHEMA}.fontes_dados
         FOR UPDATE TO authenticated
         USING (
-          ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-          OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+          EXISTS (
+            SELECT 1 FROM {SCHEMA}.usuarios u
+            WHERE u.usuario_auth_id = auth.uid()
+              AND u.ativo = true
+              AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+          )
         )
     """)
 

@@ -79,23 +79,36 @@ def upgrade() -> None:
         CREATE POLICY "modelos_arquivo_select" ON {SCHEMA}.modelos_arquivo
         FOR SELECT TO authenticated
         USING (
-          ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-          OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+          EXISTS (
+            SELECT 1 FROM {SCHEMA}.usuarios u
+            WHERE u.usuario_auth_id = auth.uid()
+              AND u.ativo = true
+              AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+          )
         )
     """)
     op.execute(f"""
         CREATE POLICY "modelos_arquivo_insert" ON {SCHEMA}.modelos_arquivo
         FOR INSERT TO authenticated
         WITH CHECK (
-          ({SCHEMA}.usuario_atual()).perfil IN ('admin_ia16', 'cliente_admin')
+          EXISTS (
+            SELECT 1 FROM {SCHEMA}.usuarios u
+            WHERE u.usuario_auth_id = auth.uid()
+              AND u.ativo = true
+              AND u.perfil IN ('admin_ia16', 'cliente_admin')
+          )
         )
     """)
     op.execute(f"""
         CREATE POLICY "modelos_arquivo_update" ON {SCHEMA}.modelos_arquivo
         FOR UPDATE TO authenticated
         USING (
-          ({SCHEMA}.usuario_atual()).perfil = 'admin_ia16'
-          OR empresa_id = ({SCHEMA}.usuario_atual()).empresa_id
+          EXISTS (
+            SELECT 1 FROM {SCHEMA}.usuarios u
+            WHERE u.usuario_auth_id = auth.uid()
+              AND u.ativo = true
+              AND (u.perfil = 'admin_ia16' OR u.empresa_id = empresa_id)
+          )
         )
     """)
 
