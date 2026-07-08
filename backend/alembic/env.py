@@ -49,13 +49,16 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    from sqlalchemy import text as _text
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        connect_args={"options": f"-csearch_path={db_schema}"},
     )
     with connectable.connect() as connection:
+        # SET explícito garante o schema correto mesmo via PgBouncer/pooler
+        connection.execute(_text(f"SET search_path TO {db_schema}"))
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
