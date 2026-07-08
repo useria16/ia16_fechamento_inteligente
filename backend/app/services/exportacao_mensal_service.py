@@ -71,6 +71,26 @@ def _periodo_str_mensal(mes: int, ano: int) -> str:
     return f"{MESES_PT.get(mes, str(mes))}/{ano}"
 
 
+def _periodo_str_intervalo(data_inicio: date, data_fim: date) -> str:
+    """Retorna '15/06/2026 a 15/07/2026'."""
+    return f"{data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}"
+
+
+def _nome_aba_periodo(data_inicio: date, data_fim: date) -> str:
+    """Retorna nome de aba curto para intervalo livre."""
+    inicio = f"{data_inicio.day:02d}{_ABREV_MES.get(data_inicio.month, data_inicio.month)}"
+    fim = f"{data_fim.day:02d}{_ABREV_MES.get(data_fim.month, data_fim.month)}"
+    ano = str(data_fim.year)[-2:]
+    return f"{inicio}-{fim}{ano}"[:31]
+
+
+def _nome_arquivo_periodo(empresa_nome: str, data_inicio: date, data_fim: date) -> str:
+    empresa_slug = _sanitizar_nome_arquivo(empresa_nome)
+    inicio = data_inicio.strftime("%d-%m-%Y")
+    fim = data_fim.strftime("%d-%m-%Y")
+    return f"Conciliacao_{empresa_slug}_{inicio}_a_{fim}.xlsx"
+
+
 def _saldo_inicial(lancamentos: list) -> float:
     """Calcula o saldo antes do primeiro lançamento (mesma lógica do serviço diário)."""
     if not lancamentos:
@@ -152,14 +172,44 @@ def buscar_fechamentos_do_mes(
     )
 
 
+def buscar_fechamentos_do_periodo(
+    db: Session,
+    empresa_id,
+    data_inicio: date,
+    data_fim: date,
+    tipo_conciliacao: str,
+    status_incluidos: set[str] | None = None,
+) -> list[FechamentoFinanceiro]:
+    """
+    Retorna fechamentos da empresa, intervalo e tipo informados,
+    determinados pelo campo periodo_inicio, em ordem cronológica.
+    """
+    if status_incluidos is None:
+        status_incluidos = _STATUS_EXPORTAVEL
+
+    return (
+        db.query(FechamentoFinanceiro)
+        .filter(
+            FechamentoFinanceiro.empresa_id == empresa_id,
+            FechamentoFinanceiro.tipo_conciliacao == tipo_conciliacao,
+            FechamentoFinanceiro.status.in_(status_incluidos),
+            FechamentoFinanceiro.periodo_inicio >= data_inicio,
+            FechamentoFinanceiro.periodo_inicio <= data_fim,
+        )
+        .order_by(FechamentoFinanceiro.periodo_inicio)
+        .all()
+    )
+
+
 # ── layout idêntico ao diário (extrato_anotado) ───────────────────────────────
 
 def _gerar_excel_extrato_anotado_mensal(
     empresa_nome: str,
-    mes: int,
-    ano: int,
     metadados: dict,
     lancamentos: list,
+    nome_aba: str,
+    periodo_label: str,
+    nome_arquivo: str,
 ) -> tuple[bytes, str]:
     """
     Gera o Excel mensal com exatamente o mesmo layout visual do export diário:
@@ -193,7 +243,7 @@ def _gerar_excel_extrato_anotado_mensal(
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = _nome_aba(mes, ano)
+    ws.title = nome_aba
 
     # ── Larguras das colunas (idênticas ao diário) ────────────────────────────
     ws.column_dimensions["A"].width = 21.1
@@ -230,7 +280,7 @@ def _gerar_excel_extrato_anotado_mensal(
 
     # ── L6: Período ──────────────────────────────────────────────────────────
     ws.row_dimensions[6].height = 15.6
-    c = ws.cell(6, 1, f"Periodo:  {_periodo_str_mensal(mes, ano)}")
+    c = ws.cell(6, 1, f"Periodo:  {periodo_label}")
     c.font = font_n12
     c.fill = fill_periodo
 
@@ -326,19 +376,18 @@ def _gerar_excel_extrato_anotado_mensal(
     wb.save(buffer)
     buffer.seek(0)
 
-    nome_mes    = MESES_PT.get(mes, str(mes))
-    empresa_slug = _sanitizar_nome_arquivo(empresa_nome)
-    return buffer.read(), f"Conciliacao_{empresa_slug}_{nome_mes}_{ano}.xlsx"
+    return buffer.read(), nome_arquivo
 
 
 # ── layout básico para tipos bilaterais ───────────────────────────────────────
 
 def _gerar_excel_bilateral_mensal(
     empresa_nome: str,
-    mes: int,
-    ano: int,
     metadados: dict,
     itens: list,
+    nome_aba: str,
+    periodo_label: str,
+    nome_arquivo: str,
 ) -> tuple[bytes, str]:
     """
     Layout para tipos bilaterais (sem semântica de saldo/entrada/saída).
@@ -359,7 +408,7 @@ def _gerar_excel_bilateral_mensal(
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = _nome_aba(mes, ano)
+    ws.title = nome_aba
 
     ws.cell(1, 1, "Atualização:").font = font_label
     ws.cell(1, 2, atualizacao)
@@ -369,7 +418,7 @@ def _gerar_excel_bilateral_mensal(
     ws.cell(3, 2, agencia)
     ws.cell(4, 1, "Conta:").font = font_label
     ws.cell(4, 2, conta)
-    c = ws.cell(6, 1, f"Periodo:  {_periodo_str_mensal(mes, ano)}")
+    c = ws.cell(6, 1, f"Periodo:  {periodo_label}")
     c.font = font_label
     c.fill = fill_periodo
 
@@ -400,9 +449,7 @@ def _gerar_excel_bilateral_mensal(
     wb.save(buffer)
     buffer.seek(0)
 
-    nome_mes     = MESES_PT.get(mes, str(mes))
-    empresa_slug = _sanitizar_nome_arquivo(empresa_nome)
-    return buffer.read(), f"Conciliacao_{empresa_slug}_{nome_mes}_{ano}.xlsx"
+    return buffer.read(), nome_arquivo
 
 
 # ── função principal ───────────────────────────────────────────────────────────
@@ -439,6 +486,8 @@ def gerar_excel_mensal(
 
     ids_fechamentos = [f.id for f in fechamentos]
     metadados       = _buscar_metadados_extrato(db, ids_fechamentos)
+    nome_mes = MESES_PT.get(mes, str(mes))
+    nome_arquivo = f"Conciliacao_{_sanitizar_nome_arquivo(empresa_nome)}_{nome_mes}_{ano}.xlsx"
 
     if tipo_conciliacao == "extrato_anotado":
         lancamentos = (
@@ -451,7 +500,14 @@ def gerar_excel_mensal(
             )
             .all()
         )
-        return _gerar_excel_extrato_anotado_mensal(empresa_nome, mes, ano, metadados, lancamentos)
+        return _gerar_excel_extrato_anotado_mensal(
+            empresa_nome=empresa_nome,
+            metadados=metadados,
+            lancamentos=lancamentos,
+            nome_aba=_nome_aba(mes, ano),
+            periodo_label=_periodo_str_mensal(mes, ano),
+            nome_arquivo=nome_arquivo,
+        )
 
     itens = (
         db.query(ItemConciliacao)
@@ -459,4 +515,81 @@ def gerar_excel_mensal(
         .order_by(ItemConciliacao.data_prevista, ItemConciliacao.fechamento_id)
         .all()
     )
-    return _gerar_excel_bilateral_mensal(empresa_nome, mes, ano, metadados, itens)
+    return _gerar_excel_bilateral_mensal(
+        empresa_nome=empresa_nome,
+        metadados=metadados,
+        itens=itens,
+        nome_aba=_nome_aba(mes, ano),
+        periodo_label=_periodo_str_mensal(mes, ano),
+        nome_arquivo=nome_arquivo,
+    )
+
+
+def gerar_excel_periodo(
+    db: Session,
+    empresa_id,
+    data_inicio: date,
+    data_fim: date,
+    tipo_conciliacao: str,
+    status_incluidos: set[str] | None = None,
+) -> tuple[bytes, str]:
+    """
+    Gera a planilha de conciliação para um intervalo livre.
+
+    Mantém o mesmo layout da exportação mensal e diária para extrato_anotado.
+    Levanta ValueError se não houver fechamentos no período.
+    """
+    if data_inicio > data_fim:
+        raise ValueError("Data inicial não pode ser maior que a data final.")
+
+    fechamentos = buscar_fechamentos_do_periodo(
+        db, empresa_id, data_inicio, data_fim, tipo_conciliacao, status_incluidos
+    )
+
+    if not fechamentos:
+        raise ValueError(
+            f"Nenhuma conciliação encontrada entre {data_inicio.strftime('%d/%m/%Y')} "
+            f"e {data_fim.strftime('%d/%m/%Y')} com tipo '{tipo_conciliacao}'."
+        )
+
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    empresa_nome = empresa.nome if empresa else str(empresa_id)
+
+    ids_fechamentos = [f.id for f in fechamentos]
+    metadados = _buscar_metadados_extrato(db, ids_fechamentos)
+    nome_arquivo = _nome_arquivo_periodo(empresa_nome, data_inicio, data_fim)
+
+    if tipo_conciliacao == "extrato_anotado":
+        lancamentos = (
+            db.query(LancamentoExtratoAnotado)
+            .filter(LancamentoExtratoAnotado.fechamento_id.in_(ids_fechamentos))
+            .order_by(
+                LancamentoExtratoAnotado.data_lancamento,
+                LancamentoExtratoAnotado.fechamento_id,
+                LancamentoExtratoAnotado.linha_origem,
+            )
+            .all()
+        )
+        return _gerar_excel_extrato_anotado_mensal(
+            empresa_nome=empresa_nome,
+            metadados=metadados,
+            lancamentos=lancamentos,
+            nome_aba=_nome_aba_periodo(data_inicio, data_fim),
+            periodo_label=_periodo_str_intervalo(data_inicio, data_fim),
+            nome_arquivo=nome_arquivo,
+        )
+
+    itens = (
+        db.query(ItemConciliacao)
+        .filter(ItemConciliacao.fechamento_id.in_(ids_fechamentos))
+        .order_by(ItemConciliacao.data_prevista, ItemConciliacao.fechamento_id)
+        .all()
+    )
+    return _gerar_excel_bilateral_mensal(
+        empresa_nome=empresa_nome,
+        metadados=metadados,
+        itens=itens,
+        nome_aba=_nome_aba_periodo(data_inicio, data_fim),
+        periodo_label=_periodo_str_intervalo(data_inicio, data_fim),
+        nome_arquivo=nome_arquivo,
+    )

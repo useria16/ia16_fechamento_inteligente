@@ -105,6 +105,74 @@ def test_exportar_mensal_com_params_chega_ao_endpoint_correto():
     )
 
 
+def test_exportar_periodo_nao_e_capturado_por_rota_dinamica():
+    """
+    Garante que GET /api/v1/conciliacoes/exportar-periodo chama
+    exportar_consolidado_periodo e NÃO obter_conciliacao.
+    """
+    app, db_mock = _app_com_mocks()
+    db_mock.query.return_value.filter.return_value.first.return_value = None
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get("/api/v1/conciliacoes/exportar-periodo")
+
+    assert response.status_code == 422, (
+        f"Esperado 422 (query params ausentes no endpoint por período), "
+        f"mas recebeu {response.status_code}. "
+        f"Isso indica que a rota dinâmica '{{conciliacao_id}}' capturou 'exportar-periodo'."
+    )
+
+
+def test_exportar_periodo_com_params_chega_ao_endpoint_correto():
+    """
+    Com os parâmetros obrigatórios presentes, a requisição deve ser roteada
+    para exportar_consolidado_periodo. O endpoint tentará resolver a empresa
+    e retornará 404 (empresa não encontrada), não erro da rota dinâmica.
+    """
+    app, db_mock = _app_com_mocks()
+    db_mock.query.return_value.filter.return_value.first.return_value = None
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get(
+        "/api/v1/conciliacoes/exportar-periodo",
+        params={
+            "data_inicio": "2026-06-15",
+            "data_fim": "2026-07-15",
+            "tipo_conciliacao": "extrato_anotado",
+        },
+    )
+
+    assert response.status_code == 404
+    corpo = response.json()
+    detail = corpo.get("detail", {})
+    erro = detail.get("erro", {}) if isinstance(detail, dict) else {}
+    assert erro.get("codigo") == "EMPRESA_NAO_ENCONTRADA", (
+        f"Esperado código EMPRESA_NAO_ENCONTRADA, recebeu: {corpo}. "
+        f"Se recebeu 'FECHAMENTO_NAO_ENCONTRADO', a rota dinâmica capturou 'exportar-periodo'."
+    )
+
+
+def test_exportar_periodo_rejeita_data_inicial_maior_que_final():
+    app, db_mock = _app_com_mocks()
+    db_mock.query.return_value.filter.return_value.first.return_value = MagicMock()
+
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get(
+        "/api/v1/conciliacoes/exportar-periodo",
+        params={
+            "data_inicio": "2026-07-15",
+            "data_fim": "2026-06-15",
+            "tipo_conciliacao": "extrato_anotado",
+        },
+    )
+
+    assert response.status_code == 400
+    corpo = response.json()
+    detail = corpo.get("detail", {})
+    erro = detail.get("erro", {}) if isinstance(detail, dict) else {}
+    assert erro.get("codigo") == "PERIODO_INVALIDO"
+
+
 def test_rota_dinamica_ainda_funciona_com_uuid_valido():
     """
     Garante que a rota /{conciliacao_id} continua sendo atingida por UUID.
@@ -154,6 +222,14 @@ def test_ordem_das_rotas_no_router():
         f"Rota /exportar-mensal não encontrada no router. Rotas registradas: {caminhos}"
     )
 
+    idx_periodo = next(
+        (i for i, p in enumerate(caminhos) if p.endswith("/exportar-periodo")),
+        None,
+    )
+    assert idx_periodo is not None, (
+        f"Rota /exportar-periodo não encontrada no router. Rotas registradas: {caminhos}"
+    )
+
     idx_dinamica = next(
         (i for i, p in enumerate(caminhos) if p.endswith("/{conciliacao_id}")),
         None,
@@ -164,6 +240,12 @@ def test_ordem_das_rotas_no_router():
 
     assert idx_mensal < idx_dinamica, (
         f"/exportar-mensal está no índice {idx_mensal}, "
+        f"mas /{{conciliacao_id}} está no índice {idx_dinamica}. "
+        f"A rota estática deve ser registrada ANTES da dinâmica."
+    )
+
+    assert idx_periodo < idx_dinamica, (
+        f"/exportar-periodo está no índice {idx_periodo}, "
         f"mas /{{conciliacao_id}} está no índice {idx_dinamica}. "
         f"A rota estática deve ser registrada ANTES da dinâmica."
     )

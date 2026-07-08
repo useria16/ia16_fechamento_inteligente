@@ -40,7 +40,9 @@ import pytest
 import openpyxl
 
 from app.services.exportacao_mensal_service import (
+    buscar_fechamentos_do_periodo,
     buscar_fechamentos_do_mes,
+    gerar_excel_periodo,
     gerar_excel_mensal,
     _nome_aba,
     _COLUNAS_MENSAL,
@@ -707,3 +709,100 @@ def test_saida_font_vermelha():
     assert font is not None, "Coluna G deve ter font definida"
     cor = font.color.rgb if font.color else ""
     assert "FF0000" in cor, f"Saída (col G) deve ter font vermelha FF0000, mas: {cor!r}"
+
+
+# ── Teste 28: busca fechamentos por período livre ────────────────────────────
+
+def test_busca_fechamentos_do_periodo():
+    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 15))
+    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 7, 15))
+    db = _db_com_fechamentos(fechamentos=[fech1, fech2], lancamentos=[])
+
+    fechamentos = buscar_fechamentos_do_periodo(
+        db=db,
+        empresa_id=EMPRESA_A,
+        data_inicio=date(2026, 6, 15),
+        data_fim=date(2026, 7, 15),
+        tipo_conciliacao="extrato_anotado",
+    )
+
+    assert [f.id for f in fechamentos] == [FECH_1, FECH_2]
+
+
+# ── Teste 29: período livre mantém layout e cabeçalho esperados ──────────────
+
+def test_exportacao_periodo_layout_e_nome_arquivo():
+    fech1 = _make_fechamento(fid=FECH_1, periodo_inicio=date(2026, 6, 15))
+    fech2 = _make_fechamento(fid=FECH_2, periodo_inicio=date(2026, 7, 15))
+    l1 = _make_lancamento(fechamento_id=FECH_1, data=date(2026, 6, 15), descricao_banco="PIX Junho")
+    l2 = _make_lancamento(fechamento_id=FECH_2, data=date(2026, 7, 15), descricao_banco="PIX Julho")
+    empresa = _make_empresa(nome="Empresa Teste")
+    arquivo = _make_arquivo(
+        fechamento_id=FECH_1,
+        metadados={
+            "atualizacao": "15/06/2026 09:00:00",
+            "nome": "BANCO TESTE S/A",
+            "agencia": "0285",
+            "conta": "0017861-2",
+        },
+    )
+    db = _db_com_fechamentos(
+        fechamentos=[fech1, fech2],
+        lancamentos=[l1, l2],
+        empresa=empresa,
+        arquivos_extrato=[arquivo],
+    )
+
+    conteudo, nome = gerar_excel_periodo(
+        db=db,
+        empresa_id=EMPRESA_A,
+        data_inicio=date(2026, 6, 15),
+        data_fim=date(2026, 7, 15),
+        tipo_conciliacao="extrato_anotado",
+    )
+
+    assert nome == "Conciliacao_Empresa_Teste_15-06-2026_a_15-07-2026.xlsx"
+
+    wb = openpyxl.load_workbook(io.BytesIO(conteudo))
+    ws = wb.active
+
+    assert wb.sheetnames == ["15Jun-15Jul26"]
+    assert ws.cell(row=2, column=2).value == "BANCO TESTE S/A"
+    assert ws.cell(row=3, column=2).value == "0285"
+    assert ws.cell(row=4, column=2).value == "0017861-2"
+    assert ws.cell(row=6, column=1).value == "Periodo:  15/06/2026 a 15/07/2026"
+    assert ws.cell(row=8, column=1).value == "DATA"
+    assert ws.cell(row=9, column=2).value == "SALDO TOTAL DISPONÍVEL DIA"
+    assert ws.cell(row=10, column=2).value == "PIX Junho"
+    assert ws.cell(row=11, column=2).value == "PIX Julho"
+    assert ws.cell(row=12, column=2).value == "SALDO TOTAL DISPONÍVEL DIA"
+
+
+# ── Teste 30: período inválido não gera arquivo ──────────────────────────────
+
+def test_exportacao_periodo_invalido():
+    db = _db_com_fechamentos(fechamentos=[])
+
+    with pytest.raises(ValueError, match="Data inicial não pode ser maior"):
+        gerar_excel_periodo(
+            db=db,
+            empresa_id=EMPRESA_A,
+            data_inicio=date(2026, 7, 15),
+            data_fim=date(2026, 6, 15),
+            tipo_conciliacao="extrato_anotado",
+        )
+
+
+# ── Teste 31: período sem conciliações retorna erro claro ────────────────────
+
+def test_exportacao_periodo_sem_conciliacoes():
+    db = _db_com_fechamentos(fechamentos=[])
+
+    with pytest.raises(ValueError, match="Nenhuma conciliação encontrada entre 15/06/2026 e 15/07/2026"):
+        gerar_excel_periodo(
+            db=db,
+            empresa_id=EMPRESA_A,
+            data_inicio=date(2026, 6, 15),
+            data_fim=date(2026, 7, 15),
+            tipo_conciliacao="extrato_anotado",
+        )

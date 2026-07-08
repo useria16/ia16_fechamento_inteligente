@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
@@ -18,7 +18,7 @@ from app.schemas.aprovacao import AprovarFechamentoRequest, ReabrirFechamentoReq
 from app.schemas.fechamento import ConciliacaoCreate, ConciliacaoDetalhe, ConciliacaoListagem, ResumoConciliacoes
 from app.schemas.resposta import RespostaErro, RespostaLista, RespostaSucesso, paginar
 from app.services.exportacao_fechamento_service import gerar_excel_fechamento
-from app.services.exportacao_mensal_service import gerar_excel_mensal
+from app.services.exportacao_mensal_service import gerar_excel_mensal, gerar_excel_periodo
 
 router = APIRouter(prefix="/api/v1/conciliacoes", tags=["conciliacoes"])
 
@@ -238,6 +238,103 @@ def exportar_consolidado_mensal(
         raise HTTPException(
             status_code=500,
             detail={"sucesso": False, "erro": {"codigo": "ERRO_GERACAO_CONSOLIDADO", "mensagem": "Erro ao gerar o consolidado mensal."}},
+        ) from exc
+
+    return Response(
+        content=conteudo,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
+
+
+# ── GET /exportar-periodo ─────────────────────────────────────────────────────
+# IMPORTANTE: deve ficar antes de /{conciliacao_id} para não ser capturado
+# pela rota dinâmica do FastAPI/Starlette (ordem de registro importa).
+
+@router.get(
+    "/exportar-periodo",
+    responses={
+        400: {"model": RespostaErro},
+        403: {"model": RespostaErro},
+        404: {"model": RespostaErro},
+        422: {"model": RespostaErro},
+    },
+)
+def exportar_consolidado_periodo(
+    usuario: Annotated[Usuario, Depends(get_usuario_atual)],
+    db: Annotated[Session, Depends(get_db)],
+    data_inicio: date = Query(..., description="Data inicial do período"),
+    data_fim: date = Query(..., description="Data final do período"),
+    tipo_conciliacao: str = Query(..., description="Tipo de conciliação"),
+    empresa_id: Optional[str] = Query(None, description="ID da empresa (obrigatório para admin_ia16)"),
+    status_incluidos: Optional[str] = Query(
+        None,
+        description="Status incluídos separados por vírgula. Padrão: processado,com_divergencias,aprovado,reaberto",
+    ),
+):
+    """
+    Gera e retorna a conciliação consolidada por período em formato Excel (.xlsx).
+
+    Restrições:
+    - Usuários comuns só podem exportar a empresa vinculada ao seu perfil.
+    - Admin iA16 deve informar empresa_id.
+    - Nunca mistura dados de empresas distintas.
+    """
+    if data_inicio > data_fim:
+        raise HTTPException(
+            status_code=400,
+            detail={"sucesso": False, "erro": {"codigo": "PERIODO_INVALIDO", "mensagem": "Data inicial não pode ser maior que a data final."}},
+        )
+
+    if usuario.perfil == "admin_ia16":
+        if not empresa_id:
+            raise HTTPException(
+                status_code=400,
+                detail={"sucesso": False, "erro": {"codigo": "EMPRESA_OBRIGATORIA", "mensagem": "empresa_id é obrigatório para admin_ia16."}},
+            )
+        empresa_alvo_id = empresa_id
+    else:
+        empresa_alvo_id = str(usuario.empresa_id)
+        if not empresa_alvo_id:
+            raise HTTPException(
+                status_code=400,
+                detail={"sucesso": False, "erro": {"codigo": "USUARIO_SEM_EMPRESA", "mensagem": "Usuário sem empresa vinculada."}},
+            )
+        if empresa_id and empresa_id != empresa_alvo_id:
+            raise HTTPException(
+                status_code=403,
+                detail={"sucesso": False, "erro": {"codigo": "SEM_PERMISSAO_EMPRESA", "mensagem": "Sem permissão para exportar dados de outra empresa."}},
+            )
+
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_alvo_id).first()
+    if not empresa:
+        raise HTTPException(
+            status_code=404,
+            detail={"sucesso": False, "erro": {"codigo": "EMPRESA_NAO_ENCONTRADA", "mensagem": "Empresa não encontrada."}},
+        )
+
+    status_set = None
+    if status_incluidos:
+        status_set = {s.strip() for s in status_incluidos.split(",") if s.strip()}
+
+    try:
+        conteudo, nome_arquivo = gerar_excel_periodo(
+            db=db,
+            empresa_id=empresa.id,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            tipo_conciliacao=tipo_conciliacao,
+            status_incluidos=status_set,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"sucesso": False, "erro": {"codigo": "SEM_CONCILIACOES_NO_PERIODO", "mensagem": str(exc)}},
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={"sucesso": False, "erro": {"codigo": "ERRO_GERACAO_CONSOLIDADO", "mensagem": "Erro ao gerar o consolidado por período."}},
         ) from exc
 
     return Response(

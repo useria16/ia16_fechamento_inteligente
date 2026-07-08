@@ -18,3 +18,18 @@ export const consolidadoMensalSchema = z.object({
 })
 
 export type ConsolidadoMensalForm = z.infer<typeof consolidadoMensalSchema>
+
+export const consolidadoPeriodoSchema = z.object({
+  data_inicio: z.string().min(1, 'Informe a data inicial'),
+  data_fim: z.string().min(1, 'Informe a data final'),
+  tipo_conciliacao: z.string().min(1, 'Selecione o tipo de conciliação'),
+  empresa_id: z.string().optional(),
+}).refine(
+  dados => new Date(`${dados.data_inicio}T00:00:00`) <= new Date(`${dados.data_fim}T00:00:00`),
+  {
+    path: ['data_fim'],
+    message: 'Data final deve ser igual ou posterior à data inicial',
+  },
+)
+
+export type ConsolidadoPeriodoForm = z.infer<typeof consolidadoPeriodoSchema>
