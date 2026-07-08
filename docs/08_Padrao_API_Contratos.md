@@ -346,7 +346,98 @@ Cada contrato deve seguir este formato:
 /api/v1/logs-processamento
 ```
 
-## 16. Contrato — Exportação Mensal de Conciliação
+## 16. Contrato — Empresas
+
+### `GET /api/v1/empresas`
+
+Lista empresas disponíveis para o usuário autenticado.
+
+#### Permissões
+
+| Perfil | Comportamento |
+|---|---|
+| `admin_ia16` | Lista todas as empresas. |
+| `cliente_admin`, `cliente_operador` | Lista somente a empresa vinculada ao usuário. |
+
+#### Resposta de sucesso — `200 OK`
+
+```json
+[
+  {
+    "id": "uuid",
+    "nome": "DAXX MIDIA LTDA",
+    "cnpj": "11775820000171",
+    "status": "ativa",
+    "criado_em": "2026-07-08T00:00:00Z",
+    "atualizado_em": "2026-07-08T00:00:00Z"
+  }
+]
+```
+
+### `POST /api/v1/empresas`
+
+Cria uma empresa. Uso restrito ao perfil `admin_ia16`.
+
+#### Body
+
+```json
+{
+  "nome": "DAXX MIDIA LTDA",
+  "cnpj": "11.775.820/0001-71"
+}
+```
+
+#### Regras
+
+- `nome` é obrigatório.
+- `cnpj` é obrigatório.
+- O backend normaliza o CNPJ para apenas números.
+- CNPJ deve conter 14 dígitos.
+- CNPJ não pode estar duplicado.
+
+#### Resposta de sucesso — `201 Created`
+
+```json
+{
+  "id": "uuid",
+  "nome": "DAXX MIDIA LTDA",
+  "cnpj": "11775820000171",
+  "status": "ativa",
+  "criado_em": "2026-07-08T00:00:00Z",
+  "atualizado_em": "2026-07-08T00:00:00Z"
+}
+```
+
+#### Erros
+
+| HTTP | Quando |
+|---|---|
+| `401` | Usuário não autenticado. |
+| `403` | Usuário não tem perfil `admin_ia16`. |
+| `409` | CNPJ já cadastrado. |
+| `422` | CNPJ inválido ou body incompleto. |
+
+### `GET /api/v1/empresas/{empresa_id}`
+
+Retorna uma empresa pelo ID.
+
+- `admin_ia16` pode acessar qualquer empresa.
+- Usuários clientes só podem acessar a própria empresa.
+
+### `PATCH /api/v1/empresas/{empresa_id}`
+
+Atualiza dados básicos da empresa. Uso restrito ao perfil `admin_ia16`.
+
+#### Body
+
+```json
+{
+  "nome": "DAXX MIDIA LTDA",
+  "status": "ativa"
+}
+```
+
+## 17. Contrato — Exportação Mensal de Conciliação
 
 ### `GET /api/v1/conciliacoes/exportar-mensal`
 
@@ -450,7 +541,7 @@ GET /api/v1/conciliacoes/exportar-mensal?ano=2026&mes=6&tipo_conciliacao=extrato
 Authorization: Bearer <token>
 ```
 
-## 17. Contrato — Exportação de Conciliação por Período
+## 18. Contrato — Exportação de Conciliação por Período
 
 ### `GET /api/v1/conciliacoes/exportar-periodo`
 
@@ -542,7 +633,7 @@ GET /api/v1/conciliacoes/exportar-periodo?data_inicio=2026-06-15&data_fim=2026-0
 Authorization: Bearer <token>
 ```
 
-## 18. Regra final
+## 19. Regra final
 
 Nenhuma tela do frontend deve ser implementada consumindo payloads inventados.
 

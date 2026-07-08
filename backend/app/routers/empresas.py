@@ -10,7 +10,7 @@ from app.models.empresa import Empresa
 from app.models.usuario import Usuario
 from app.schemas.empresa import EmpresaCreate, EmpresaPatch, EmpresaResponse
 
-router = APIRouter(prefix="/api/empresas", tags=["empresas"])
+router = APIRouter(prefix="/api/v1/empresas", tags=["empresas"])
 
 
 @router.get("", response_model=list[EmpresaResponse])

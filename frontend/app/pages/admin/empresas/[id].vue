@@ -224,7 +224,7 @@ const formPolitica = reactive<AtualizacaoPoliticaRetencaoArquivo>({
 
 onMounted(async () => {
   try {
-    empresa.value = await api.get(`/api/empresas/${route.params.id}`)
+    empresa.value = await api.get(`/api/v1/empresas/${route.params.id}`)
     form.nome = empresa.value.nome
     form.status = empresa.value.status
   } catch (e: any) {
@@ -257,7 +257,7 @@ async function submeter() {
   salvando.value = true
   erroEmpresa.value = null
   try {
-    await api.patch(`/api/empresas/${route.params.id}`, form)
+    await api.patch(`/api/v1/empresas/${route.params.id}`, form)
     navigateTo("/admin/empresas")
   } catch (e: any) {
     erroEmpresa.value = e.message
