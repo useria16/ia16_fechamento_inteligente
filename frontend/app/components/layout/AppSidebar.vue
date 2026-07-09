@@ -56,8 +56,9 @@ type NavItem = {
 
 const todosItens: NavItem[] = [
   { to: '/dashboard',                 icon: 'dashboard',    label: 'Dashboard' },
+  { to: '/admin/clientes',            icon: 'clientes',     label: 'Clientes',     perfis: ['admin_ia16'] },
   { to: '/admin/empresas',            icon: 'empresas',     label: 'Empresas',     perfis: ['admin_ia16'] },
-  { to: '/admin/usuarios',            icon: 'usuarios',     label: 'Usuários',     perfis: ['admin_ia16'],                        disabled: true },
+  { to: '/admin/usuarios',            icon: 'usuarios',     label: 'Usuários',     perfis: ['admin_ia16', 'cliente_admin'] },
   { to: '/conciliacoes',              icon: 'conciliacoes', label: 'Conciliações' },
   { to: '/arquivos',                  icon: 'arquivos',     label: 'Arquivos',                                                    disabled: true },
   { to: '/divergencias',              icon: 'divergencias', label: 'Divergências',                                                disabled: true },

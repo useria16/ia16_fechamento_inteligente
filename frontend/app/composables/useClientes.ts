@@ -1,23 +1,22 @@
-export interface Empresa {
+export interface Cliente {
   id: string
   nome: string
-  cnpj: string
-  status: string
+  ativo: boolean
+  criado_em: string
+  atualizado_em: string
 }
 
-export interface NovaEmpresa {
-  cliente_id: string
+export interface NovoCliente {
   nome: string
-  cnpj: string
 }
 
-export interface AtualizacaoEmpresa {
+export interface AtualizacaoCliente {
   nome?: string
-  status?: 'ativa' | 'inativa'
+  ativo?: boolean
 }
 
-export function useEmpresas() {
-  const empresas = ref<Empresa[]>([])
+export function useClientes() {
+  const clientes = ref<Cliente[]>([])
   const carregando = ref(false)
   const salvando = ref(false)
   const erro = ref<string | null>(null)
@@ -34,22 +33,22 @@ export function useEmpresas() {
     erro.value = null
     try {
       const api = useApi()
-      const dados = await api.get<Empresa[]>('/api/v1/empresas')
-      empresas.value = Array.isArray(dados) ? dados : []
+      const dados = await api.get<Cliente[]>('/api/v1/clientes')
+      clientes.value = Array.isArray(dados) ? dados : []
     } catch (e: any) {
       erro.value = extrairErro(e)
-      empresas.value = []
+      clientes.value = []
     } finally {
       carregando.value = false
     }
   }
 
-  async function criar(dados: NovaEmpresa): Promise<Empresa> {
+  async function criar(dados: NovoCliente): Promise<Cliente> {
     salvando.value = true
     erro.value = null
     try {
       const api = useApi()
-      return await api.post<Empresa>('/api/v1/empresas', dados)
+      return await api.post<Cliente>('/api/v1/clientes', dados)
     } catch (e: any) {
       erro.value = extrairErro(e)
       throw e
@@ -58,17 +57,17 @@ export function useEmpresas() {
     }
   }
 
-  async function obter(id: string): Promise<Empresa> {
+  async function obter(id: string): Promise<Cliente> {
     const api = useApi()
-    return await api.get<Empresa>(`/api/v1/empresas/${id}`)
+    return await api.get<Cliente>(`/api/v1/clientes/${id}`)
   }
 
-  async function atualizar(id: string, dados: AtualizacaoEmpresa): Promise<Empresa> {
+  async function atualizar(id: string, dados: AtualizacaoCliente): Promise<Cliente> {
     salvando.value = true
     erro.value = null
     try {
       const api = useApi()
-      return await api.patch<Empresa>(`/api/v1/empresas/${id}`, dados)
+      return await api.patch<Cliente>(`/api/v1/clientes/${id}`, dados)
     } catch (e: any) {
       erro.value = extrairErro(e)
       throw e
@@ -77,5 +76,5 @@ export function useEmpresas() {
     }
   }
 
-  return { empresas, carregando, salvando, erro, carregar, criar, obter, atualizar }
+  return { clientes, carregando, salvando, erro, carregar, criar, obter, atualizar }
 }

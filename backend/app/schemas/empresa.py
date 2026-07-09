@@ -6,6 +6,7 @@ from pydantic import BaseModel, field_validator
 
 
 class EmpresaCreate(BaseModel):
+    cliente_id: uuid.UUID
     nome: str
     cnpj: str
 
@@ -20,11 +21,20 @@ class EmpresaCreate(BaseModel):
 
 class EmpresaResponse(BaseModel):
     id: uuid.UUID
+    cliente_id: uuid.UUID | None
     nome: str
     cnpj: str
     status: Literal["ativa", "inativa"]
     criado_em: datetime
     atualizado_em: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EmpresaSimples(BaseModel):
+    id: uuid.UUID
+    nome: str
+    cnpj: str
 
     model_config = {"from_attributes": True}
 

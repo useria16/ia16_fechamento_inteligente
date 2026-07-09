@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, DateTime, Enum, ForeignKey, text
+from sqlalchemy import String, Boolean, DateTime, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -9,8 +9,8 @@ from app.core.config import settings
 from app.core.database import Base
 
 
-class Empresa(Base):
-    __tablename__ = "empresas"
+class Cliente(Base):
+    __tablename__ = "clientes"
     __table_args__ = {"schema": settings.DB_SCHEMA}
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -18,17 +18,11 @@ class Empresa(Base):
         primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
-    cliente_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey(f"{settings.DB_SCHEMA}.clientes.id", ondelete="RESTRICT"),
-        nullable=True,
-    )
     nome: Mapped[str] = mapped_column(String(255), nullable=False)
-    cnpj: Mapped[str] = mapped_column(String(14), unique=True, nullable=False)
-    status: Mapped[str] = mapped_column(
-        Enum("ativa", "inativa", name="status_empresa", schema=settings.DB_SCHEMA),
+    ativo: Mapped[bool] = mapped_column(
+        Boolean(),
+        server_default=text("true"),
         nullable=False,
-        server_default="ativa",
     )
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -41,6 +35,9 @@ class Empresa(Base):
         nullable=False,
     )
 
-    cliente: Mapped["Cliente"] = relationship(  # noqa: F821
-        "Cliente", back_populates="empresas", lazy="select"
+    empresas: Mapped[list["Empresa"]] = relationship(  # noqa: F821
+        "Empresa", back_populates="cliente", lazy="select"
+    )
+    usuarios: Mapped[list["Usuario"]] = relationship(  # noqa: F821
+        "Usuario", back_populates="cliente", lazy="select"
     )

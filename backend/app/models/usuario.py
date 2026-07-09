@@ -18,6 +18,11 @@ class Usuario(Base):
         primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
+    cliente_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{settings.DB_SCHEMA}.clientes.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     empresa_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(f"{settings.DB_SCHEMA}.empresas.id", ondelete="RESTRICT"),
@@ -46,6 +51,11 @@ class Usuario(Base):
         server_default=text("true"),
         nullable=False,
     )
+    troca_senha_obrigatoria: Mapped[bool] = mapped_column(
+        Boolean(),
+        server_default=text("false"),
+        nullable=False,
+    )
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=text("now()"),
@@ -57,4 +67,5 @@ class Usuario(Base):
         nullable=False,
     )
 
+    cliente: Mapped["Cliente"] = relationship("Cliente", back_populates="usuarios", lazy="select")  # noqa: F821
     empresa: Mapped["Empresa"] = relationship("Empresa", lazy="select")  # noqa: F821

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import empresas, usuarios, fontes_dados, modelos_arquivo
+from app.routers import clientes, empresas, usuarios, fontes_dados, modelos_arquivo
 from app.routers import conciliacoes, auth, arquivos, processamento, politicas_retencao, normalizacao
 from app.routers import resultado_conciliacao
 from app.routers import divergencias
@@ -29,6 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(clientes.router)
 app.include_router(empresas.router)
 app.include_router(usuarios.router)
 app.include_router(fontes_dados.router)

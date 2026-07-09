@@ -10,6 +10,19 @@
 
     <form class="rounded-xl border border-slate-200 bg-white p-6 space-y-5" @submit.prevent="submeter">
       <div class="space-y-1">
+        <label class="block text-sm font-semibold text-slate-700">Cliente <span class="text-red-500">*</span></label>
+        <select
+          v-model="form.cliente_id"
+          class="w-full rounded-lg border px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          :class="erros.cliente_id ? 'border-red-400' : 'border-slate-200'"
+        >
+          <option value="" disabled>Selecione o cliente</option>
+          <option v-for="c in clientes" :key="c.id" :value="c.id">{{ c.nome }}</option>
+        </select>
+        <p v-if="erros.cliente_id" class="text-xs text-red-500">{{ erros.cliente_id }}</p>
+      </div>
+
+      <div class="space-y-1">
         <label class="block text-sm font-semibold text-slate-700">Nome da empresa <span class="text-red-500">*</span></label>
         <input
           v-model="form.nome"
@@ -64,12 +77,16 @@ import type { EmpresaCreateForm } from '~/schemas/empresa.schema'
 definePageMeta({ layout: 'default', middleware: 'auth' })
 
 const { criar, salvando, erro } = useEmpresas()
+const { clientes, carregar: carregarClientes } = useClientes()
 
 const form = reactive<EmpresaCreateForm>({
+  cliente_id: '',
   nome: '',
   cnpj: '',
 })
 const erros = reactive<Partial<Record<keyof EmpresaCreateForm, string>>>({})
+
+onMounted(carregarClientes)
 
 function validar() {
   Object.keys(erros).forEach(k => delete (erros as any)[k])
