@@ -14,16 +14,16 @@
       <p v-if="erros.titulo" class="mt-1 text-xs text-red-500">{{ erros.titulo }}</p>
     </div>
 
-    <!-- Empresa — apenas admin_ia16 -->
-    <div v-if="isAdmin">
-      <label class="block text-sm font-medium text-slate-700 mb-1">Empresa <span class="text-red-500">*</span></label>
+    <!-- Empresa da conciliação — visível para todos os perfis -->
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-1">Empresa da conciliação <span class="text-red-500">*</span></label>
       <select
         v-model="form.empresa_id"
         class="w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         :class="erros.empresa_id ? 'border-red-400' : 'border-slate-200'"
       >
-        <option value="">Selecione a empresa</option>
-        <option v-for="e in empresas" :key="e.id" :value="e.id">{{ e.nome }}</option>
+        <option value="">Selecione a empresa da conciliação</option>
+        <option v-for="e in empresasDisponiveis" :key="e.id" :value="e.id">{{ e.nome }}</option>
       </select>
       <p v-if="erros.empresa_id" class="mt-1 text-xs text-red-500">{{ erros.empresa_id }}</p>
     </div>
@@ -96,13 +96,14 @@
 <script setup lang="ts">
 import { novaConciliacaoSchema } from '~/schemas/conciliacao.schema'
 
-const props = defineProps<{ isAdmin: boolean }>()
+defineProps<{ isAdmin: boolean }>()
 const emit = defineEmits<{ cancelar: []; criada: [id: string] }>()
 
+const auth = useAuthStore()
 const { criar } = useConciliacoes()
-const { empresas, carregar: carregarEmpresas } = useEmpresas()
 
-onMounted(() => { if (props.isAdmin) carregarEmpresas() })
+// Empresas disponíveis vêm do /eu — sem chamada de API extra
+const empresasDisponiveis = computed(() => auth.empresasDisponiveis)
 
 const form = reactive({
   titulo: '',
@@ -120,7 +121,6 @@ const tipos = [
   { valor: 'extrato_anotado', label: 'Extrato Anotado' },
 ]
 
-
 function limparErros() {
   Object.keys(erros).forEach(k => delete erros[k])
   erroGeral.value = null
@@ -128,6 +128,11 @@ function limparErros() {
 
 async function submeter() {
   limparErros()
+
+  if (!form.empresa_id) {
+    erros.empresa_id = 'Selecione a empresa'
+    return
+  }
 
   const resultado = novaConciliacaoSchema.safeParse(form)
   if (!resultado.success) {
@@ -137,21 +142,15 @@ async function submeter() {
     return
   }
 
-  if (props.isAdmin && !form.empresa_id) {
-    erros.empresa_id = 'Selecione a empresa'
-    return
-  }
-
   salvando.value = true
   try {
-    const payload = {
+    const criada = await criar({
       titulo: form.titulo,
       tipo_conciliacao: form.tipo_conciliacao,
       periodo_inicio: form.periodo_inicio,
       periodo_fim: form.periodo_fim,
-      ...(props.isAdmin && form.empresa_id ? { empresa_id: form.empresa_id } : {}),
-    }
-    const criada = await criar(payload)
+      empresa_id: form.empresa_id,
+    })
     emit('criada', criada.id)
   } catch (e: any) {
     erroGeral.value = e.message ?? 'Não foi possível criar a conciliação.'

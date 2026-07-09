@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import verificar_acesso_por_empresa_id
 from app.models.fechamento_financeiro import FechamentoFinanceiro
 from app.models.lancamento_extrato_anotado import LancamentoExtratoAnotado
 from app.models.log_processamento import LogProcessamento
@@ -28,10 +29,7 @@ def _verificar_acesso(conciliacao_id: str, usuario: Usuario, db: Session) -> Fec
         raise HTTPException(status_code=404, detail={
             "sucesso": False, "erro": {"codigo": "FECHAMENTO_NAO_ENCONTRADO", "mensagem": "Conciliação não encontrada."}
         })
-    if usuario.perfil != "admin_ia16" and str(fechamento.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail={
-            "sucesso": False, "erro": {"codigo": "SEM_PERMISSAO", "mensagem": "Sem permissão para acessar esta conciliação."}
-        })
+    verificar_acesso_por_empresa_id(fechamento.empresa_id, usuario, db)
     if fechamento.tipo_conciliacao != "extrato_anotado":
         raise HTTPException(status_code=400, detail={
             "sucesso": False, "erro": {
@@ -96,10 +94,7 @@ def anotar_lancamento(
             "sucesso": False, "erro": {"codigo": "LANCAMENTO_NAO_ENCONTRADO", "mensagem": "Lançamento não encontrado."}
         })
 
-    if usuario.perfil != "admin_ia16" and str(lancamento.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail={
-            "sucesso": False, "erro": {"codigo": "SEM_PERMISSAO", "mensagem": "Sem permissão para editar este lançamento."}
-        })
+    verificar_acesso_por_empresa_id(lancamento.empresa_id, usuario, db)
 
     status_anterior = lancamento.status_revisao
     agora = datetime.now(timezone.utc)

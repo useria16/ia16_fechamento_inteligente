@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import empresa_ids_do_usuario, verificar_acesso_por_empresa_id
 from app.models.fonte_dados import FonteDados
 from app.models.usuario import Usuario
 from app.schemas.fonte_dados import FonteDadosCreate, FonteDadosPatch, FonteDadosResponse
@@ -25,7 +26,8 @@ def listar_fontes_dados(
     query = db.query(FonteDados)
 
     if usuario.perfil != "admin_ia16":
-        query = query.filter(FonteDados.empresa_id == usuario.empresa_id)
+        ids_permitidos = empresa_ids_do_usuario(usuario, db)
+        query = query.filter(FonteDados.empresa_id.in_(ids_permitidos))
 
     if ativo is not None:
         query = query.filter(FonteDados.ativo == ativo)
@@ -48,12 +50,13 @@ def criar_fonte_dados(
     if usuario.perfil not in ("admin_ia16", "cliente_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Perfil sem permissão")
 
-    if usuario.perfil == "admin_ia16":
-        if not dados.empresa_id:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empresa_id obrigatório para admin_ia16")
-        empresa_id = dados.empresa_id
-    else:
-        empresa_id = usuario.empresa_id
+    if not dados.empresa_id:
+        if usuario.empresa_id:
+            dados.empresa_id = usuario.empresa_id  # fallback legado
+        else:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empresa_id obrigatório")
+    verificar_acesso_por_empresa_id(dados.empresa_id, usuario, db)
+    empresa_id = dados.empresa_id
 
     fonte = FonteDados(
         empresa_id=empresa_id,
@@ -81,8 +84,7 @@ def obter_fonte_dados(
     if not fonte:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte de dados não encontrada")
 
-    if usuario.perfil != "admin_ia16" and str(fonte.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso não autorizado")
+    verificar_acesso_por_empresa_id(fonte.empresa_id, usuario, db)
 
     return RespostaSucesso(dados=FonteDadosResponse.model_validate(fonte))
 
@@ -101,8 +103,7 @@ def atualizar_fonte_dados(
     if not fonte:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte de dados não encontrada")
 
-    if usuario.perfil != "admin_ia16" and str(fonte.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso não autorizado")
+    verificar_acesso_por_empresa_id(fonte.empresa_id, usuario, db)
 
     if dados.nome is not None:
         fonte.nome = dados.nome
@@ -134,8 +135,7 @@ def inativar_fonte_dados(
     if not fonte:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fonte de dados não encontrada")
 
-    if usuario.perfil != "admin_ia16" and str(fonte.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso não autorizado")
+    verificar_acesso_por_empresa_id(fonte.empresa_id, usuario, db)
 
     fonte.ativo = False
     fonte.atualizado_em = datetime.now(timezone.utc)

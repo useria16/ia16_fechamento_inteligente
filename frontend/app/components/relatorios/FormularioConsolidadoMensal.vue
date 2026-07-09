@@ -23,18 +23,17 @@
         </p>
       </div>
 
-      <div v-if="isAdmin" class="space-y-1">
-        <label class="block text-xs font-medium text-slate-600">Empresa <span class="text-red-400">*</span></label>
+      <div class="space-y-1">
+        <label class="block text-xs font-medium text-slate-600">Empresa da conciliação <span class="text-red-400">*</span></label>
         <select
           v-model="empresaId"
-          :disabled="carregandoEmpresas"
-          class="w-full rounded-lg border px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          class="w-full rounded-lg border px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           :class="erroEmpresa ? 'border-red-400' : 'border-slate-200'"
         >
           <option value="">
-            {{ carregandoEmpresas ? 'Carregando empresas...' : empresas.length === 0 ? 'Nenhuma empresa disponível' : 'Selecione a empresa' }}
+            {{ empresasDisponiveis.length === 0 ? 'Nenhuma empresa disponível' : 'Selecione a empresa da conciliação' }}
           </option>
-          <option v-for="e in empresas" :key="e.id" :value="e.id">{{ e.nome }}</option>
+          <option v-for="e in empresasDisponiveis" :key="e.id" :value="e.id">{{ e.nome }}</option>
         </select>
         <p v-if="erroEmpresa" class="text-xs text-red-500">{{ erroEmpresa }}</p>
       </div>
@@ -162,9 +161,8 @@ import type { ConsolidadoMensalForm, ConsolidadoPeriodoForm } from '~/schemas/re
 
 const auth = useAuthStore()
 const { baixando, erro, baixarConsolidado, baixarConsolidadoPeriodo, limparFeedback } = useConsolidadoMensal()
-const { empresas, carregando: carregandoEmpresas, carregar: carregarEmpresas } = useEmpresas()
 
-const isAdmin = computed(() => auth.perfil === 'admin_ia16')
+const empresasDisponiveis = computed(() => auth.empresasDisponiveis)
 
 const agora = new Date()
 const hoje = agora.toISOString().slice(0, 10)
@@ -206,12 +204,9 @@ const textoAjudaModo = computed(() => (
     : 'Exporta todas as conciliações encontradas entre as datas informadas.'
 ))
 
-onMounted(async () => {
-  if (isAdmin.value) {
-    await carregarEmpresas()
-    if (empresas.value.length === 1) {
-      empresaId.value = empresas.value[0].id
-    }
+onMounted(() => {
+  if (empresasDisponiveis.value.length === 1) {
+    empresaId.value = empresasDisponiveis.value[0].id
   }
 })
 
@@ -238,7 +233,7 @@ function exibirFeedback(tipo: 'sucesso' | 'erro', mensagem: string) {
 
 function validarEmpresa(): boolean {
   erroEmpresa.value = null
-  if (isAdmin.value && !empresaId.value.trim()) {
+  if (!empresaId.value.trim()) {
     erroEmpresa.value = 'Selecione uma empresa para exportar.'
     return false
   }

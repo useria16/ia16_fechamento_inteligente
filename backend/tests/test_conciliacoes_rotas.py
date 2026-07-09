@@ -77,31 +77,50 @@ def test_exportar_mensal_nao_e_capturado_por_rota_dinamica():
 
 def test_exportar_mensal_com_params_chega_ao_endpoint_correto():
     """
-    Com os parâmetros obrigatórios presentes, a requisição deve ser roteada
-    para exportar_consolidado_mensal. O endpoint tentará resolver a empresa
-    e retornará 404 (empresa não encontrada) — nunca o erro de
-    'Conciliação não encontrada' da rota dinâmica.
+    Garante que /exportar-mensal é roteado para exportar_consolidado_mensal.
+
+    Sem empresa_id: endpoint correto retorna 400 (EMPRESA_OBRIGATORIA).
+    Com empresa_id inexistente: endpoint correto retorna 404 (EMPRESA_NAO_ENCONTRADA).
+    Jamais deve retornar FECHAMENTO_NAO_ENCONTRADO (que viria da rota dinâmica).
     """
     app, db_mock = _app_com_mocks()
-
-    # Empresa não encontrada — simula DB sem dados
     db_mock.query.return_value.filter.return_value.first.return_value = None
 
     client = TestClient(app, raise_server_exceptions=False)
-    response = client.get(
+
+    # Sem empresa_id: deve retornar 400 (obrigatório) — não 404 da rota dinâmica
+    r_sem_empresa = client.get(
         "/api/v1/conciliacoes/exportar-mensal",
         params={"ano": 2026, "mes": 6, "tipo_conciliacao": "extrato_anotado"},
     )
+    assert r_sem_empresa.status_code == 400, (
+        f"Esperado 400 (empresa_id obrigatório), recebeu {r_sem_empresa.status_code}. "
+        f"Se recebeu 404 com FECHAMENTO_NAO_ENCONTRADO, a rota dinâmica capturou 'exportar-mensal'."
+    )
+    detalhe_400 = r_sem_empresa.json().get("detail", {})
+    erro_400 = detalhe_400.get("erro", {}) if isinstance(detalhe_400, dict) else {}
+    assert erro_400.get("codigo") == "EMPRESA_OBRIGATORIA", (
+        f"Esperado código EMPRESA_OBRIGATORIA, recebeu: {r_sem_empresa.json()}"
+    )
 
-    # Deve chegar ao endpoint mensal e falhar com 404 (empresa não encontrada)
-    # Se retornar 404 com 'Conciliação não encontrada', a rota dinâmica captou
-    assert response.status_code == 404
-    corpo = response.json()
-    detail = corpo.get("detail", {})
-    erro = detail.get("erro", {}) if isinstance(detail, dict) else {}
-    assert erro.get("codigo") == "EMPRESA_NAO_ENCONTRADA", (
-        f"Esperado código EMPRESA_NAO_ENCONTRADA, recebeu: {corpo}. "
-        f"Se recebeu 'FECHAMENTO_NAO_ENCONTRADO', a rota dinâmica capturou 'exportar-mensal'."
+    # Com empresa_id inexistente: deve retornar 404 (EMPRESA_NAO_ENCONTRADA)
+    r_empresa_inexistente = client.get(
+        "/api/v1/conciliacoes/exportar-mensal",
+        params={
+            "ano": 2026,
+            "mes": 6,
+            "tipo_conciliacao": "extrato_anotado",
+            "empresa_id": "00000000-0000-0000-0000-000000000099",
+        },
+    )
+    assert r_empresa_inexistente.status_code == 404, (
+        f"Esperado 404 (empresa não encontrada), recebeu {r_empresa_inexistente.status_code}."
+    )
+    detalhe_404 = r_empresa_inexistente.json().get("detail", {})
+    erro_404 = detalhe_404.get("erro", {}) if isinstance(detalhe_404, dict) else {}
+    assert erro_404.get("codigo") == "EMPRESA_NAO_ENCONTRADA", (
+        f"Esperado código EMPRESA_NAO_ENCONTRADA, recebeu: {r_empresa_inexistente.json()}. "
+        f"Se recebeu FECHAMENTO_NAO_ENCONTRADO, a rota dinâmica capturou 'exportar-mensal'."
     )
 
 
@@ -125,15 +144,19 @@ def test_exportar_periodo_nao_e_capturado_por_rota_dinamica():
 
 def test_exportar_periodo_com_params_chega_ao_endpoint_correto():
     """
-    Com os parâmetros obrigatórios presentes, a requisição deve ser roteada
-    para exportar_consolidado_periodo. O endpoint tentará resolver a empresa
-    e retornará 404 (empresa não encontrada), não erro da rota dinâmica.
+    Garante que /exportar-periodo é roteado para exportar_consolidado_periodo.
+
+    Sem empresa_id: endpoint correto retorna 400 (EMPRESA_OBRIGATORIA).
+    Com empresa_id inexistente: endpoint correto retorna 404 (EMPRESA_NAO_ENCONTRADA).
+    Jamais deve retornar FECHAMENTO_NAO_ENCONTRADO (que viria da rota dinâmica).
     """
     app, db_mock = _app_com_mocks()
     db_mock.query.return_value.filter.return_value.first.return_value = None
 
     client = TestClient(app, raise_server_exceptions=False)
-    response = client.get(
+
+    # Sem empresa_id: deve retornar 400 (obrigatório) — não 404 da rota dinâmica
+    r_sem_empresa = client.get(
         "/api/v1/conciliacoes/exportar-periodo",
         params={
             "data_inicio": "2026-06-15",
@@ -141,14 +164,34 @@ def test_exportar_periodo_com_params_chega_ao_endpoint_correto():
             "tipo_conciliacao": "extrato_anotado",
         },
     )
+    assert r_sem_empresa.status_code == 400, (
+        f"Esperado 400 (empresa_id obrigatório), recebeu {r_sem_empresa.status_code}. "
+        f"Se recebeu 404 com FECHAMENTO_NAO_ENCONTRADO, a rota dinâmica capturou 'exportar-periodo'."
+    )
+    detalhe_400 = r_sem_empresa.json().get("detail", {})
+    erro_400 = detalhe_400.get("erro", {}) if isinstance(detalhe_400, dict) else {}
+    assert erro_400.get("codigo") == "EMPRESA_OBRIGATORIA", (
+        f"Esperado código EMPRESA_OBRIGATORIA, recebeu: {r_sem_empresa.json()}"
+    )
 
-    assert response.status_code == 404
-    corpo = response.json()
-    detail = corpo.get("detail", {})
-    erro = detail.get("erro", {}) if isinstance(detail, dict) else {}
-    assert erro.get("codigo") == "EMPRESA_NAO_ENCONTRADA", (
-        f"Esperado código EMPRESA_NAO_ENCONTRADA, recebeu: {corpo}. "
-        f"Se recebeu 'FECHAMENTO_NAO_ENCONTRADO', a rota dinâmica capturou 'exportar-periodo'."
+    # Com empresa_id inexistente: deve retornar 404 (EMPRESA_NAO_ENCONTRADA)
+    r_empresa_inexistente = client.get(
+        "/api/v1/conciliacoes/exportar-periodo",
+        params={
+            "data_inicio": "2026-06-15",
+            "data_fim": "2026-07-15",
+            "tipo_conciliacao": "extrato_anotado",
+            "empresa_id": "00000000-0000-0000-0000-000000000099",
+        },
+    )
+    assert r_empresa_inexistente.status_code == 404, (
+        f"Esperado 404 (empresa não encontrada), recebeu {r_empresa_inexistente.status_code}."
+    )
+    detalhe_404 = r_empresa_inexistente.json().get("detail", {})
+    erro_404 = detalhe_404.get("erro", {}) if isinstance(detalhe_404, dict) else {}
+    assert erro_404.get("codigo") == "EMPRESA_NAO_ENCONTRADA", (
+        f"Esperado código EMPRESA_NAO_ENCONTRADA, recebeu: {r_empresa_inexistente.json()}. "
+        f"Se recebeu FECHAMENTO_NAO_ENCONTRADO, a rota dinâmica capturou 'exportar-periodo'."
     )
 
 

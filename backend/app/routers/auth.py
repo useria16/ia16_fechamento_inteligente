@@ -78,6 +78,11 @@ def trocar_senha(
         atualizar_senha_usuario_auth(usuario.usuario_auth_id, dados.nova_senha)
     except SupabaseAuthError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível alterar a senha no provedor de autenticação.",
+        ) from exc
 
     usuario.troca_senha_obrigatoria = False
     usuario.atualizado_em = datetime.now(timezone.utc)

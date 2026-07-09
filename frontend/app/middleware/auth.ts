@@ -9,4 +9,8 @@ export default defineNuxtRouteMiddleware((to) => {
     return navigateTo("/login")
   }
 
+  if (auth.trocaSenhaObrigatoria && to.path !== "/alterar-senha") {
+    return navigateTo("/alterar-senha")
+  }
+
 })

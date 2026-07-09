@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_usuario_atual
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.permissoes import verificar_acesso_por_empresa_id
 from app.models.arquivo_enviado import ArquivoEnviado
 from app.models.fechamento_financeiro import FechamentoFinanceiro
 from app.models.usuario import Usuario
@@ -66,8 +67,7 @@ def _verificar_acesso_conciliacao(
     ).first()
     if not fechamento:
         raise HTTPException(status_code=404, detail="Conciliação não encontrada")
-    if usuario.perfil != "admin_ia16" and str(fechamento.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail="Sem permissão para acessar esta conciliação")
+    verificar_acesso_por_empresa_id(fechamento.empresa_id, usuario, db)
     return fechamento
 
 
@@ -221,8 +221,7 @@ def remover_arquivo(
     if not arquivo:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
 
-    if usuario.perfil != "admin_ia16" and str(arquivo.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail="Sem permissão")
+    verificar_acesso_por_empresa_id(arquivo.empresa_id, usuario, db)
 
     if arquivo.status == "lido":
         raise HTTPException(status_code=409, detail="Não é possível remover arquivo já processado")

@@ -63,4 +63,4 @@ class ConciliacaoCreate(BaseModel):
     tipo_conciliacao: str
     periodo_inicio: date
     periodo_fim: date
-    empresa_id: uuid.UUID | None = None
+    empresa_id: uuid.UUID

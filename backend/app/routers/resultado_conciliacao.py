@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import verificar_acesso_por_empresa_id
 from app.models.divergencia_conciliacao import DivergenciaConciliacao
 from app.models.fechamento_financeiro import FechamentoFinanceiro
 from app.models.item_conciliacao import ItemConciliacao
@@ -75,8 +76,7 @@ def _verificar_acesso(
     ).first()
     if not fechamento:
         raise HTTPException(status_code=404, detail="Conciliação não encontrada")
-    if usuario.perfil != "admin_ia16" and str(fechamento.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail="Sem permissão para acessar esta conciliação")
+    verificar_acesso_por_empresa_id(fechamento.empresa_id, usuario, db)
     return fechamento
 
 

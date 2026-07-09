@@ -34,7 +34,7 @@ def listar_usuarios(
     db: Annotated[Session, Depends(get_db)],
 ):
     if usuario.perfil == "admin_ia16":
-        return db.query(Usuario).all()
+        return db.query(Usuario).filter(Usuario.cliente_id.isnot(None)).all()
     if usuario.cliente_id:
         return db.query(Usuario).filter(Usuario.cliente_id == usuario.cliente_id).all()
     # fallback legado
@@ -173,6 +173,11 @@ def resetar_senha_usuario(
         atualizar_senha_usuario_auth(alvo.usuario_auth_id, dados.senha_temporaria)
     except SupabaseAuthError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível resetar a senha no provedor de autenticação.",
+        ) from exc
 
     alvo.troca_senha_obrigatoria = True
     alvo.atualizado_em = datetime.now(timezone.utc)

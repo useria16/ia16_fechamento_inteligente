@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import empresa_ids_do_usuario, verificar_acesso_por_empresa_id
 from app.models.modelo_arquivo import ModeloArquivo
 from app.models.usuario import Usuario
 from app.schemas.modelo_arquivo import ModeloArquivoCreate, ModeloArquivoPatch, ModeloArquivoResponse
@@ -26,7 +27,8 @@ def listar_modelos_arquivo(
     query = db.query(ModeloArquivo)
 
     if usuario.perfil != "admin_ia16":
-        query = query.filter(ModeloArquivo.empresa_id == usuario.empresa_id)
+        ids_permitidos = empresa_ids_do_usuario(usuario, db)
+        query = query.filter(ModeloArquivo.empresa_id.in_(ids_permitidos))
 
     if tipo_arquivo:
         query = query.filter(ModeloArquivo.tipo_arquivo == tipo_arquivo)
@@ -51,12 +53,13 @@ def criar_modelo_arquivo(
     if usuario.perfil not in ("admin_ia16", "cliente_admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Perfil sem permissão")
 
-    if usuario.perfil == "admin_ia16":
-        if not dados.empresa_id:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empresa_id obrigatório para admin_ia16")
-        empresa_id = dados.empresa_id
-    else:
-        empresa_id = usuario.empresa_id
+    if not dados.empresa_id:
+        if usuario.empresa_id:
+            dados.empresa_id = usuario.empresa_id  # fallback legado
+        else:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empresa_id obrigatório")
+    verificar_acesso_por_empresa_id(dados.empresa_id, usuario, db)
+    empresa_id = dados.empresa_id
 
     modelo = ModeloArquivo(
         empresa_id=empresa_id,
@@ -84,8 +87,7 @@ def obter_modelo_arquivo(
     if not modelo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Modelo de arquivo não encontrado")
 
-    if usuario.perfil != "admin_ia16" and str(modelo.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso não autorizado")
+    verificar_acesso_por_empresa_id(modelo.empresa_id, usuario, db)
 
     return RespostaSucesso(dados=ModeloArquivoResponse.model_validate(modelo))
 
@@ -104,8 +106,7 @@ def atualizar_modelo_arquivo(
     if not modelo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Modelo de arquivo não encontrado")
 
-    if usuario.perfil != "admin_ia16" and str(modelo.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso não autorizado")
+    verificar_acesso_por_empresa_id(modelo.empresa_id, usuario, db)
 
     if dados.nome is not None:
         modelo.nome = dados.nome

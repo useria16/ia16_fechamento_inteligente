@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import verificar_acesso_por_empresa_id
 from app.models.arquivo_enviado import ArquivoEnviado
 from app.models.usuario import Usuario
 from app.schemas.resposta import RespostaSucesso, RespostaErro
@@ -26,8 +27,7 @@ def _verificar_acesso_arquivo(
     arquivo = db.query(ArquivoEnviado).filter(ArquivoEnviado.id == arquivo_id).first()
     if not arquivo:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
-    if usuario.perfil != "admin_ia16" and str(arquivo.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail="Sem permissão para acessar este arquivo")
+    verificar_acesso_por_empresa_id(arquivo.empresa_id, usuario, db)
     if not arquivo.arquivo_persistido or arquivo.excluido_em is not None:
         raise HTTPException(status_code=409, detail="Arquivo não está mais disponível no Storage")
     return arquivo

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import verificar_acesso_por_empresa_id
 from app.models.politica_retencao_arquivo import PoliticaRetencaoArquivo
 from app.models.empresa import Empresa
 from app.models.usuario import Usuario
@@ -36,12 +37,10 @@ def obter_politica_retencao(
 ):
     _verificar_empresa(empresa_id, db)
 
-    # admin_ia16 vê qualquer empresa; cliente_admin apenas a própria
-    if usuario.perfil == "cliente_admin" and str(usuario.empresa_id) != empresa_id:
-        raise HTTPException(status_code=403, detail="Sem permissão para acessar política desta empresa")
-
     if usuario.perfil == "cliente_operador":
         raise HTTPException(status_code=403, detail="Sem permissão")
+
+    verificar_acesso_por_empresa_id(empresa_id, usuario, db)
 
     politica = buscar_politica_ativa(empresa_id, db)
     db.commit()  # persiste caso política padrão tenha sido criada

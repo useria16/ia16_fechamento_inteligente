@@ -48,7 +48,7 @@ const senha = ref("")
 async function submeter() {
   await auth.entrar(email.value, senha.value)
   if (auth.autenticado) {
-    navigateTo("/dashboard")
+    navigateTo(auth.trocaSenhaObrigatoria ? "/alterar-senha" : "/dashboard")
   }
 }
 </script>

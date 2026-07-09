@@ -30,7 +30,6 @@ class Usuario(Base):
     )
     usuario_auth_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("auth.users.id", ondelete="CASCADE"),
         unique=True,
         nullable=False,
     )

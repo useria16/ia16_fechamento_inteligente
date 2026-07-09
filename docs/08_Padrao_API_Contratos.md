@@ -437,7 +437,117 @@ Atualiza dados básicos da empresa. Uso restrito ao perfil `admin_ia16`.
 }
 ```
 
-## 17. Contrato — Exportação Mensal de Conciliação
+## 17. Contrato — Usuários
+
+### `GET /api/v1/usuarios`
+
+Lista usuários disponíveis para o usuário autenticado.
+
+| Perfil | Comportamento |
+|---|---|
+| `admin_ia16` | Lista usuários vinculados a empresas. Não lista usuários internos sem `empresa_id`. |
+| `cliente_admin` | Lista usuários da própria empresa. |
+| `cliente_operador` | Não deve usar gestão de usuários. |
+
+Regras:
+
+- A listagem não retorna usuários sem empresa vinculada.
+- Usuários internos `admin_ia16` sem `empresa_id` não aparecem na tela operacional de usuários.
+- A gestão de usuários nesta tela é voltada para usuários das empresas clientes.
+
+### `POST /api/v1/usuarios`
+
+Cria um usuário na aplicação e no Supabase Auth. Não existe cadastro público.
+
+#### Body
+
+```json
+{
+  "nome": "Maria Financeiro",
+  "email": "maria@empresa.com.br",
+  "perfil": "cliente_operador",
+  "empresa_id": "uuid-da-empresa",
+  "senha_temporaria": "SenhaTemporaria123"
+}
+```
+
+#### Regras
+
+- A senha temporária não é salva na tabela `usuarios`.
+- O backend usa `SUPABASE_SERVICE_KEY` somente no servidor para criar o usuário em `auth.users`.
+- Depois cria o registro em `usuarios` com `usuario_auth_id` retornado pelo Supabase Auth.
+- Todo usuário cliente (`cliente_admin`, `cliente_operador`) deve ter `empresa_id`.
+- `admin_ia16` pode criar qualquer perfil.
+- `cliente_admin` só pode criar usuário `cliente_operador` da própria empresa.
+- Todo usuário criado por este endpoint inicia com `troca_senha_obrigatoria = true`.
+
+#### Resposta de sucesso — `201 Created`
+
+```json
+{
+  "id": "uuid",
+  "empresa_id": "uuid-da-empresa",
+  "usuario_auth_id": "uuid-auth-users",
+  "nome": "Maria Financeiro",
+  "email": "maria@empresa.com.br",
+  "perfil": "cliente_operador",
+  "ativo": true,
+  "troca_senha_obrigatoria": true,
+  "criado_em": "2026-07-08T00:00:00Z",
+  "atualizado_em": "2026-07-08T00:00:00Z"
+}
+```
+
+#### Erros
+
+| HTTP | Quando |
+|---|---|
+| `403` | Perfil sem permissão para criar usuário solicitado. |
+| `409` | E-mail já existe em `usuarios`. |
+| `422` | Payload inválido ou senha temporária com menos de 8 caracteres. |
+| `502` | Falha ao criar/atualizar usuário no Supabase Auth. |
+
+### `PATCH /api/v1/usuarios/{usuario_id}`
+
+Atualiza dados básicos do usuário:
+
+```json
+{
+  "nome": "Maria Financeiro",
+  "perfil": "cliente_operador",
+  "ativo": true
+}
+```
+
+### `POST /api/v1/usuarios/{usuario_id}/resetar-senha`
+
+Define uma nova senha temporária e força troca no próximo acesso.
+
+```json
+{
+  "senha_temporaria": "NovaSenha123"
+}
+```
+
+### `POST /api/v1/auth/trocar-senha`
+
+Permite ao usuário autenticado trocar a própria senha.
+
+#### Body
+
+```json
+{
+  "nova_senha": "NovaSenhaDefinitiva123"
+}
+```
+
+#### Regras
+
+- Usa o usuário autenticado pelo token Supabase.
+- Atualiza a senha no Supabase Auth via backend.
+- Após sucesso, marca `troca_senha_obrigatoria = false`.
+
+## 18. Contrato — Exportação Mensal de Conciliação
 
 ### `GET /api/v1/conciliacoes/exportar-mensal`
 
@@ -541,7 +651,7 @@ GET /api/v1/conciliacoes/exportar-mensal?ano=2026&mes=6&tipo_conciliacao=extrato
 Authorization: Bearer <token>
 ```
 
-## 18. Contrato — Exportação de Conciliação por Período
+## 19. Contrato — Exportação de Conciliação por Período
 
 ### `GET /api/v1/conciliacoes/exportar-periodo`
 
@@ -633,7 +743,7 @@ GET /api/v1/conciliacoes/exportar-periodo?data_inicio=2026-06-15&data_fim=2026-0
 Authorization: Bearer <token>
 ```
 
-## 19. Regra final
+## 20. Regra final
 
 Nenhuma tela do frontend deve ser implementada consumindo payloads inventados.
 

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import verificar_acesso_por_empresa_id
 from app.models.arquivo_enviado import ArquivoEnviado
 from app.models.fechamento_financeiro import FechamentoFinanceiro
 from app.models.log_processamento import LogProcessamento
@@ -96,8 +97,7 @@ def processar_conciliacao(
         raise HTTPException(status_code=404, detail="Conciliação não encontrada")
 
     # ── 2. Verificar acesso ───────────────────────────────────────────────
-    if usuario.perfil != "admin_ia16" and str(fechamento.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail="Sem permissão para acessar esta conciliação")
+    verificar_acesso_por_empresa_id(str(fechamento.empresa_id), usuario, db)
 
     # ── 3. Verificar status bloqueado ─────────────────────────────────────
     if fechamento.status in STATUS_BLOQUEADOS:

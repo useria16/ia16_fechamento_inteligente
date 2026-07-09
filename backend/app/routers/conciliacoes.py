@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import empresa_ids_do_usuario, validar_acesso_empresa
 from app.models.divergencia_conciliacao import DivergenciaConciliacao
 from app.models.empresa import Empresa
 from app.models.fechamento_financeiro import FechamentoFinanceiro
@@ -21,6 +22,8 @@ from app.services.exportacao_fechamento_service import gerar_excel_fechamento
 from app.services.exportacao_mensal_service import gerar_excel_mensal, gerar_excel_periodo
 
 router = APIRouter(prefix="/api/v1/conciliacoes", tags=["conciliacoes"])
+
+
 
 
 @router.get("", response_model=RespostaLista[ConciliacaoListagem])
@@ -43,7 +46,8 @@ def listar_conciliacoes(
 
     # RLS por empresa
     if usuario.perfil != "admin_ia16":
-        q = q.filter(FechamentoFinanceiro.empresa_id == usuario.empresa_id)
+        ids_permitidos = empresa_ids_do_usuario(usuario, db)
+        q = q.filter(FechamentoFinanceiro.empresa_id.in_(ids_permitidos))
     elif empresa_id:
         q = q.filter(FechamentoFinanceiro.empresa_id == empresa_id)
 
@@ -86,18 +90,11 @@ def criar_conciliacao(
     usuario: Annotated[Usuario, Depends(get_usuario_atual)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    if usuario.perfil == "admin_ia16":
-        if not dados.empresa_id:
-            raise HTTPException(status_code=400, detail="empresa_id é obrigatório para admin_ia16")
-        empresa_id = dados.empresa_id
-    else:
-        if not usuario.empresa_id:
-            raise HTTPException(status_code=400, detail="Usuário sem empresa vinculada")
-        empresa_id = usuario.empresa_id
+    if not dados.empresa_id:
+        raise HTTPException(status_code=400, detail="empresa_id é obrigatório")
+    empresa_id = dados.empresa_id
 
-    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
-    if not empresa:
-        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    empresa = validar_acesso_empresa(db, usuario, str(empresa_id))
 
     if dados.periodo_fim < dados.periodo_inicio:
         raise HTTPException(status_code=422, detail="periodo_fim deve ser posterior a periodo_inicio")
@@ -139,7 +136,8 @@ def resumo_conciliacoes(
     q = db.query(FechamentoFinanceiro)
 
     if usuario.perfil != "admin_ia16":
-        q = q.filter(FechamentoFinanceiro.empresa_id == usuario.empresa_id)
+        ids_permitidos = empresa_ids_do_usuario(usuario, db)
+        q = q.filter(FechamentoFinanceiro.empresa_id.in_(ids_permitidos))
 
     todos = q.all()
 
@@ -186,34 +184,20 @@ def exportar_consolidado_mensal(
     - Admin iA16 deve informar empresa_id.
     - Nunca mistura dados de empresas distintas.
     """
-    # Resolver empresa_id conforme perfil
-    if usuario.perfil == "admin_ia16":
-        if not empresa_id:
-            raise HTTPException(
-                status_code=400,
-                detail={"sucesso": False, "erro": {"codigo": "EMPRESA_OBRIGATORIA", "mensagem": "empresa_id é obrigatório para admin_ia16."}},
-            )
-        empresa_alvo_id = empresa_id
-    else:
-        empresa_alvo_id = str(usuario.empresa_id)
-        if not empresa_alvo_id:
-            raise HTTPException(
-                status_code=400,
-                detail={"sucesso": False, "erro": {"codigo": "USUARIO_SEM_EMPRESA", "mensagem": "Usuário sem empresa vinculada."}},
-            )
-        # Garantir que não tente acessar outra empresa
-        if empresa_id and empresa_id != empresa_alvo_id:
-            raise HTTPException(
-                status_code=403,
-                detail={"sucesso": False, "erro": {"codigo": "SEM_PERMISSAO_EMPRESA", "mensagem": "Sem permissão para exportar dados de outra empresa."}},
-            )
-
-    empresa = db.query(Empresa).filter(Empresa.id == empresa_alvo_id).first()
-    if not empresa:
+    # Resolver empresa_id e validar acesso
+    if not empresa_id:
         raise HTTPException(
-            status_code=404,
-            detail={"sucesso": False, "erro": {"codigo": "EMPRESA_NAO_ENCONTRADA", "mensagem": "Empresa não encontrada."}},
+            status_code=400,
+            detail={"sucesso": False, "erro": {"codigo": "EMPRESA_OBRIGATORIA", "mensagem": "empresa_id é obrigatório."}},
         )
+    try:
+        empresa = validar_acesso_empresa(db, usuario, empresa_id)
+    except HTTPException as exc:
+        codigo = "EMPRESA_NAO_ENCONTRADA" if exc.status_code == 404 else "SEM_PERMISSAO_EMPRESA"
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"sucesso": False, "erro": {"codigo": codigo, "mensagem": str(exc.detail)}},
+        ) from exc
 
     # Resolver status_incluidos
     status_set = None
@@ -286,32 +270,19 @@ def exportar_consolidado_periodo(
             detail={"sucesso": False, "erro": {"codigo": "PERIODO_INVALIDO", "mensagem": "Data inicial não pode ser maior que a data final."}},
         )
 
-    if usuario.perfil == "admin_ia16":
-        if not empresa_id:
-            raise HTTPException(
-                status_code=400,
-                detail={"sucesso": False, "erro": {"codigo": "EMPRESA_OBRIGATORIA", "mensagem": "empresa_id é obrigatório para admin_ia16."}},
-            )
-        empresa_alvo_id = empresa_id
-    else:
-        empresa_alvo_id = str(usuario.empresa_id)
-        if not empresa_alvo_id:
-            raise HTTPException(
-                status_code=400,
-                detail={"sucesso": False, "erro": {"codigo": "USUARIO_SEM_EMPRESA", "mensagem": "Usuário sem empresa vinculada."}},
-            )
-        if empresa_id and empresa_id != empresa_alvo_id:
-            raise HTTPException(
-                status_code=403,
-                detail={"sucesso": False, "erro": {"codigo": "SEM_PERMISSAO_EMPRESA", "mensagem": "Sem permissão para exportar dados de outra empresa."}},
-            )
-
-    empresa = db.query(Empresa).filter(Empresa.id == empresa_alvo_id).first()
-    if not empresa:
+    if not empresa_id:
         raise HTTPException(
-            status_code=404,
-            detail={"sucesso": False, "erro": {"codigo": "EMPRESA_NAO_ENCONTRADA", "mensagem": "Empresa não encontrada."}},
+            status_code=400,
+            detail={"sucesso": False, "erro": {"codigo": "EMPRESA_OBRIGATORIA", "mensagem": "empresa_id é obrigatório."}},
         )
+    try:
+        empresa = validar_acesso_empresa(db, usuario, empresa_id)
+    except HTTPException as exc:
+        codigo = "EMPRESA_NAO_ENCONTRADA" if exc.status_code == 404 else "SEM_PERMISSAO_EMPRESA"
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"sucesso": False, "erro": {"codigo": codigo, "mensagem": str(exc.detail)}},
+        ) from exc
 
     status_set = None
     if status_incluidos:
@@ -362,8 +333,10 @@ def obter_conciliacao(
 
     f, empresa_nome = resultado
 
-    if usuario.perfil != "admin_ia16" and str(f.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(status_code=403, detail="Sem permissão para acessar esta conciliação")
+    if usuario.perfil != "admin_ia16":
+        ids_permitidos = empresa_ids_do_usuario(usuario, db)
+        if str(f.empresa_id) not in ids_permitidos:
+            raise HTTPException(status_code=403, detail="Sem permissão para acessar esta conciliação")
 
     percentual = (
         round(f.quantidade_conciliados / f.quantidade_registros * 100, 1)
@@ -408,11 +381,13 @@ def _buscar_fechamento_com_acesso(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"sucesso": False, "erro": {"codigo": "FECHAMENTO_NAO_ENCONTRADO", "mensagem": "Conciliação não encontrada."}},
         )
-    if usuario.perfil != "admin_ia16" and str(fechamento.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"sucesso": False, "erro": {"codigo": "SEM_PERMISSAO_FECHAMENTO", "mensagem": "Sem permissão para acessar esta conciliação."}},
-        )
+    if usuario.perfil != "admin_ia16":
+        ids_permitidos = empresa_ids_do_usuario(usuario, db)
+        if str(fechamento.empresa_id) not in ids_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"sucesso": False, "erro": {"codigo": "SEM_PERMISSAO_FECHAMENTO", "mensagem": "Sem permissão para acessar esta conciliação."}},
+            )
     return fechamento
 
 

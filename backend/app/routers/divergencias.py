@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_usuario_atual
 from app.core.database import get_db
+from app.core.permissoes import verificar_acesso_por_empresa_id
 from app.models.divergencia_conciliacao import DivergenciaConciliacao
 from app.models.log_processamento import LogProcessamento
 from app.models.usuario import Usuario
@@ -90,17 +91,7 @@ def revisar_divergencia(
         )
 
     # ── 2. Verificar acesso por empresa ───────────────────────────────────
-    if usuario.perfil != "admin_ia16" and str(divergencia.empresa_id) != str(usuario.empresa_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "sucesso": False,
-                "erro": {
-                    "codigo": "SEM_PERMISSAO_DIVERGENCIA",
-                    "mensagem": "Você não tem permissão para alterar esta divergência.",
-                },
-            },
-        )
+    verificar_acesso_por_empresa_id(divergencia.empresa_id, usuario, db)
 
     # ── 3. Validar status ─────────────────────────────────────────────────
     if dados.status is not None and dados.status not in _STATUS_VALIDOS:

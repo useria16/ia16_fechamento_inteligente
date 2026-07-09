@@ -5,7 +5,7 @@ export const novaConciliacaoSchema = z.object({
   tipo_conciliacao: z.string().min(1, 'Selecione o tipo de conciliação'),
   periodo_inicio: z.string().min(1, 'Informe o início do período'),
   periodo_fim: z.string().min(1, 'Informe o fim do período'),
-  empresa_id: z.string().optional(),
+  empresa_id: z.string().min(1, 'Selecione a empresa'),
 }).refine(
   d => !d.periodo_inicio || !d.periodo_fim || d.periodo_fim >= d.periodo_inicio,
   { message: 'O fim do período deve ser posterior ao início', path: ['periodo_fim'] },
